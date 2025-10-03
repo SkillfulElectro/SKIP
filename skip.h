@@ -1,3 +1,6 @@
+#ifndef SKIP_H
+#define SKIP_H
+
 #include <stddef.h>
 
 enum SkipDataTypeCode {
@@ -29,3 +32,5 @@ size_t skip_get_datatype_size(int type_code);
 int skip_write_index_to_buffer(void* cfg , void* buffer , void* value , size_t index);
 
 int skip_read_index_from_buffer(void* cfg , void* buffer , void* value , size_t index);
+
+#endif
