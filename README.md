@@ -16,7 +16,7 @@ The core of SKIP is the concept of a "config", which is a description of the dat
 - **Portability:** SKIP can be used with any programming language that can call C functions.
 - **Security:** As long as the SKIP config is not exposed, there is no way to decode the underlying data.
 
-> be sure about the buffer sizes you pass to SKIP functions is your responsibility ⚠️ 
+> being sure about the buffer sizes you pass to SKIP functions is your responsibility ⚠️ 
 ## Building
 
 To build the SKIP library and the example `main` executable, you will need to have `cmake` and `make` installed.
