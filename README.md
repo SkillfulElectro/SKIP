@@ -52,17 +52,31 @@ This enum defines the supported data types in SKIP.
 
 ```c
 enum SkipDataTypeCode {
-    skip_int = 0,
-    skip_double = 1,
-    skip_char = 2,
-    skip_size_t = 3,
+    skip_int8 = 0,
+    skip_uint8 = 1,
+    skip_int16 = 2,
+    skip_uint16 = 3,
+    skip_int32 = 4,
+    skip_uint32 = 5,
+    skip_int64 = 6,
+    skip_uint64 = 7,
+    skip_float32 = 8,
+    skip_float64 = 9,
+    skip_char = 10,
 };
 ```
 
-- `skip_int`: Represents a 4-byte integer.
-- `skip_double`: Represents an 8-byte double.
-- `skip_char`: Represents a 1-byte character.
-- `skip_size_t`: Represents an 8-byte size_t.
+- `skip_int8`: 1-byte signed integer.
+- `skip_uint8`: 1-byte unsigned integer (can be used for characters).
+- `skip_int16`: 2-byte signed integer.
+- `skip_uint16`: 2-byte unsigned integer.
+- `skip_int32`: 4-byte signed integer.
+- `skip_uint32`: 4-byte unsigned integer.
+- `skip_int64`: 8-byte signed integer.
+- `skip_uint64`: 8-byte unsigned integer.
+- `skip_float32`: 4-byte single-precision float.
+- `skip_float64`: 8-byte double-precision float.
+- `skip_char`: 1-byte character.
 
 #### `SkipInternalType`
 
@@ -159,48 +173,67 @@ Reads data from a specific index in the buffer, according to the configuration.
     - `index`: The index in the config that specifies where and how to read the data.
 - **Returns:** `0` on success, `-1` if the index is out of bounds.
 
+#### `void* skip_get_index_ptr(void* cfg, void* buffer, size_t index)`
+
+Retrieves a direct pointer to the start of the data for a given index within the buffer. This is useful for in-place access to data without needing a separate copy.
+
+- **Parameters:**
+    - `cfg`: A pointer to the SKIP config.
+    - `buffer`: A pointer to the source buffer.
+    - `index`: The index in the config that specifies which data segment to point to.
+- **Returns:** A `void*` pointer to the data segment, or `nullptr` if the index is out of bounds.
+
 ## Usage Example
 
-Here is a simple example of how to use the SKIP library to serialize and deserialize a string.
+Here is a simple example of how to use the SKIP library to serialize and deserialize a struct-like object with multiple data types.
 
 ```cpp
 #include <iostream>
+#include <cstdint>
+#include <cstring>
 #include "skip.h"
 
 int main() {
     // 1. Create a new SKIP configuration.
     void* config = skip_create_base_config();
 
-    // 2. Define the data structure. In this case, it's a single
-    //    field containing a string of 12 characters.
-    skip_push_type_to_config(config, skip_char, 12);
+    // 2. Define the data structure: a string, an integer, and a double.
+    const char* message = "Hello SKIP!";
+    size_t message_len = strlen(message) + 1; // Include null terminator
+    skip_push_type_to_config(config, skip_uint8, message_len);
+    skip_push_type_to_config(config, skip_int32, 1);
+    skip_push_type_to_config(config, skip_float64, 1);
 
-    // 3. Allocate a buffer to hold the serialized data. The size
-    //    is determined by the configuration.
+    // 3. Allocate a buffer to hold the serialized data.
     size_t buffer_size = skip_get_cfg_size(config);
     char* buffer = new char[buffer_size];
 
-    // 4. The data to be serialized.
-    const char* message = "Hello World";
+    // 4. Prepare the data to be serialized.
+    int32_t year = 2024;
+    double pi = 3.14159265359;
 
-    // 5. Write the data to the buffer. We're writing to the first
-    //    field (index 0) in our configuration.
-    skip_write_index_to_buffer(config, (void*)buffer, (void*)message, 0);
+    // 5. Write the data to the buffer.
+    skip_write_index_to_buffer(config, buffer, (void*)message, 0);
+    skip_write_index_to_buffer(config, buffer, &year, 1);
+    skip_write_index_to_buffer(config, buffer, &pi, 2);
 
-    // 6. Create a variable to hold the deserialized data.
-    char* deserialized_message = new char[12];
+    // 6. Use skip_get_index_ptr for direct, in-place access.
+    char* message_ptr = (char*)skip_get_index_ptr(config, buffer, 0);
+    int32_t* year_ptr = (int32_t*)skip_get_index_ptr(config, buffer, 1);
 
-    // 7. Read the data from the buffer back into our variable.
-    skip_read_index_from_buffer(config, (void*)buffer, (void*)deserialized_message, 0);
+    // 7. Alternatively, read data into a separate variable.
+    double pi_copy;
+    skip_read_index_from_buffer(config, buffer, &pi_copy, 2);
 
-    // 8. Print the deserialized message.
+    // 8. Print the deserialized data.
     std::cout << "Buffer size: " << buffer_size << std::endl;
-    std::cout << "Deserialized message: " << deserialized_message << std::endl;
+    std::cout << "Message (from ptr): " << message_ptr << std::endl;
+    std::cout << "Year (from ptr): " << *year_ptr << std::endl;
+    std::cout << "PI (from copy): " << pi_copy << std::endl;
 
     // 9. Clean up allocated memory.
     skip_free_cfg(config);
     delete[] buffer;
-    delete[] deserialized_message;
 
     return 0;
 }
@@ -209,6 +242,11 @@ int main() {
 When you build and run the `main` executable, the output will be:
 
 ```
-Buffer size: 12
-Deserialized message: Hello World
+Buffer size: 24
+Message (from ptr): Hello SKIP!
+Year (from ptr): 2024
+PI (from copy): 3.14159
 ```
+
+## Contribution
+- all contributions are welcomed :)
