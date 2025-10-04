@@ -4,10 +4,17 @@
 #include <stddef.h>
 
 enum SkipDataTypeCode {
-    skip_int = 0,
-    skip_double = 1,
-    skip_char = 2,
-    skip_size_t = 3,
+    skip_int8 = 0,
+    skip_uint8 = 1,
+    skip_int16 = 2,
+    skip_uint16 = 3,
+    skip_int32 = 4,
+    skip_uint32 = 5,
+    skip_int64 = 6,
+    skip_uint64 = 7,
+    skip_float32 = 8,
+    skip_float64 = 9,
+    skip_char = 10,
 };
 
 struct SkipInternalType {
@@ -32,5 +39,7 @@ size_t skip_get_datatype_size(int type_code);
 int skip_write_index_to_buffer(void* cfg , void* buffer , void* value , size_t index);
 
 int skip_read_index_from_buffer(void* cfg , void* buffer , void* value , size_t index);
+
+void* skip_get_index_ptr(void* cfg, void* buffer, size_t index);
 
 #endif
