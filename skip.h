@@ -3,6 +3,10 @@
 
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum SkipDataTypeCode {
     skip_int8 = 0,
     skip_uint8 = 1,
@@ -17,10 +21,10 @@ enum SkipDataTypeCode {
     skip_char = 10,
 };
 
-struct SkipInternalType {
+typedef struct SkipInternalType {
     int type_code;
     size_t count;
-};
+} SkipInternalType;
 
 void* skip_create_base_config();
 
@@ -41,5 +45,15 @@ int skip_write_index_to_buffer(void* cfg , void* buffer , void* value , size_t i
 int skip_read_index_from_buffer(void* cfg , void* buffer , void* value , size_t index);
 
 void* skip_get_index_ptr(void* cfg, void* buffer, size_t index);
+
+void* skip_import_cfg(const char* cfg);
+
+size_t skip_get_export_buffer_size(void* cfg);
+
+int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
