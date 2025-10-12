@@ -2,6 +2,7 @@
 #define SKIP_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,8 +23,8 @@ enum SkipDataTypeCode {
 };
 
 typedef struct SkipInternalType {
-    int type_code;
-    size_t count;
+    int32_t type_code;
+    uint64_t count;
 } SkipInternalType;
 
 void* skip_create_base_config();
