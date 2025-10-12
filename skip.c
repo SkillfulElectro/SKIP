@@ -134,7 +134,7 @@ int skip_write_index_to_buffer(void* cfg, void* buffer, void* value, size_t inde
 
 size_t skip_get_export_buffer_size(void* cfg) {
     SkipConfig* config = (SkipConfig*)cfg;
-    return sizeof(size_t) + (config->types_size * sizeof(SkipInternalType));
+    return sizeof(uint32_t) + (config->types_size * sizeof(SkipInternalType));
 }
 
 int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size) {
@@ -143,13 +143,13 @@ int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size) {
     if (buffer_size < required_size) return -1;
 
     size_t num_types = config->types_size;
-    *(size_t*)buffer = num_types;
-    memcpy(buffer + sizeof(size_t), config->types, num_types * sizeof(SkipInternalType));
+    *(uint32_t*)buffer = num_types;
+    memcpy(buffer + sizeof(uint32_t), config->types, num_types * sizeof(SkipInternalType));
     return 0;
 }
 
 void* skip_import_cfg(const char* buffer) {
-    size_t num_types = *(const size_t*)buffer;
+    uint32_t num_types = *(const uint32_t*)buffer;
     void* config_ptr = skip_create_base_config();
     if (!config_ptr) return NULL;
     SkipConfig* config = (SkipConfig*)config_ptr;
