@@ -124,11 +124,44 @@ void test_get_index_ptr() {
     std::cout << "--- Test Passed ---" << std::endl << std::endl;
 }
 
+void test_import_export() {
+    std::cout << "--- Testing Import/Export ---" << std::endl;
+
+    void* config = skip_create_base_config();
+    skip_push_type_to_config(config, skip_int32, 1);
+    skip_push_type_to_config(config, skip_float64, 2);
+    skip_push_type_to_config(config, skip_char, 10);
+
+    size_t buffer_size = skip_get_export_buffer_size(config);
+    char* exported_buffer = new char[buffer_size];
+    int export_result = skip_export_cfg(config, exported_buffer, buffer_size);
+    assert(export_result == 0);
+
+    void* imported_config = skip_import_cfg(exported_buffer);
+
+    assert(skip_get_cfg_size(config) == skip_get_cfg_size(imported_config));
+
+    SkipInternalType* original_type = skip_get_type_at_index(config, 1);
+    SkipInternalType* imported_type = skip_get_type_at_index(imported_config, 1);
+
+    assert(original_type->type_code == imported_type->type_code);
+    assert(original_type->count == imported_type->count);
+
+    std::cout << "Config sizes and types match." << std::endl;
+
+    skip_free_cfg(config);
+    skip_free_cfg(imported_config);
+    delete[] exported_buffer;
+
+    std::cout << "--- Test Passed ---" << std::endl << std::endl;
+}
+
 
 int main() {
     test_new_datatypes();
     test_get_index_ptr();
     test_char_type();
+    test_import_export();
 
     std::cout << "All tests passed!" << std::endl;
 
