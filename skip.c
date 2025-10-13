@@ -134,7 +134,7 @@ int skip_write_index_to_buffer(void* cfg, void* buffer, void* value, size_t inde
 
 size_t skip_get_export_buffer_size(void* cfg) {
     SkipConfig* config = (SkipConfig*)cfg;
-    return sizeof(uint32_t) + (config->types_size * sizeof(SkipInternalType));
+    return sizeof(uint32_t) + (config->types_size * (sizeof(int32_t) + sizeof(uint64_t)));
 }
 
 int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size) {
@@ -142,9 +142,17 @@ int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size) {
     size_t required_size = skip_get_export_buffer_size(cfg);
     if (buffer_size < required_size) return -1;
 
-    size_t num_types = config->types_size;
+    uint32_t num_types = (uint32_t)config->types_size;
     *(uint32_t*)buffer = num_types;
-    memcpy(buffer + sizeof(uint32_t), config->types, num_types * sizeof(SkipInternalType));
+    
+    char* current_pos = buffer + sizeof(uint32_t);
+    for (size_t i = 0; i < num_types; ++i) {
+        *(int32_t*)current_pos = (int32_t)config->types[i].type_code;
+        current_pos += sizeof(int32_t);
+        *(uint64_t*)current_pos = (uint64_t)config->types[i].count;
+        current_pos += sizeof(uint64_t);
+    }
+    
     return 0;
 }
 
@@ -152,37 +160,21 @@ void* skip_import_cfg(const char* buffer) {
     uint32_t num_types = *(const uint32_t*)buffer;
     void* config_ptr = skip_create_base_config();
     if (!config_ptr) return NULL;
-    SkipConfig* config = (SkipConfig*)config_ptr;
 
-    // A bit of a hack to resize and copy
-    free(config->types); // free the initial null
-    config->types_capacity = num_types;
-    config->types_size = num_types;
-    config->types = (SkipInternalType*)malloc(num_types * sizeof(SkipInternalType));
-    if (!config->types) {
-        skip_free_cfg(config);
-        return NULL;
-    }
-    memcpy(config->types, buffer + sizeof(size_t), num_types * sizeof(SkipInternalType));
-    
-    // Rebuild offsets
-    for (size_t i = 0; i < num_types; ++i) {
-        size_t type_size = skip_get_datatype_size(config->types[i].type_code);
-        size_t count = config->types[i].count;
-        size_t new_offset = config->offsets[config->offsets_size - 1] + (type_size * count);
+    const char* current_pos = buffer + sizeof(uint32_t);
+    for (uint32_t i = 0; i < num_types; ++i) {
+        int32_t type_code = *(const int32_t*)current_pos;
+        current_pos += sizeof(int32_t);
+        uint64_t count = *(const uint64_t*)current_pos;
+        current_pos += sizeof(uint64_t);
         
-        if (config->offsets_size == config->offsets_capacity) {
-            size_t new_cap = config->offsets_capacity * 2;
-            if(ensure_capacity((void**)&config->offsets, &config->offsets_capacity, sizeof(size_t), new_cap) != 0) {
-                skip_free_cfg(config);
-                return NULL;
-            }
+        if (skip_push_type_to_config(config_ptr, type_code, (size_t)count) != 0) {
+            skip_free_cfg(config_ptr);
+            return NULL;
         }
-        config->offsets[config->offsets_size] = new_offset;
-        config->offsets_size++;
     }
 
-    return config;
+    return config_ptr;
 }
 
 void* skip_get_index_ptr(void* cfg, void* buffer, size_t index) {
