@@ -183,6 +183,32 @@ Retrieves a direct pointer to the start of the data for a given index within the
     - `index`: The index in the config that specifies which data segment to point to.
 - **Returns:** A `void*` pointer to the data segment, or `nullptr` if the index is out of bounds.
 
+#### `size_t skip_get_export_buffer_size(void* cfg)`
+
+Calculates the size of the buffer needed to export the configuration.
+
+- **Parameters:**
+  - `cfg`: A pointer to the SKIP config.
+- **Returns:** The required buffer size in bytes.
+
+#### `int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size)`
+
+Exports the SKIP configuration to a buffer. This allows you to save the configuration and reuse it later, or send it over a network.
+
+- **Parameters:**
+  - `cfg`: A pointer to the SKIP config.
+  - `buffer`: The buffer to write the configuration to.
+  - `buffer_size`: The size of the buffer.
+- **Returns:** `0` on success, `-1` if the buffer is too small.
+
+#### `void* skip_import_cfg(const char* buffer)`
+
+Imports a SKIP configuration from a buffer.
+
+- **Parameters:**
+  - `buffer`: The buffer to read the configuration from.
+- **Returns:** A pointer to a new SKIP config, or `nullptr` on failure.
+
 ## Usage Example
 
 Here is a simple example of how to use the SKIP library to serialize and deserialize a struct-like object with multiple data types.
