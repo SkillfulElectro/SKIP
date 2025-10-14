@@ -72,13 +72,16 @@ static int ensure_capacity(void** array, uint64_t* capacity, uint64_t element_si
     if (*capacity < new_capacity) {
         void* new_array = realloc(*array, (size_t)(new_capacity * element_size));
         if (!new_array) {
-            return -1; // Allocation failed
+            return SKIP_ERROR_ALLOCATION_FAILED;
         }
         *array = new_array;
         *capacity = new_capacity;
     }
-    return 0;
+    return SKIP_SUCCESS;
 }
+
+#define SKIP_INITIAL_CAPACITY 16
+#define SKIP_CONFIG_VERSION 1
 
 void* skip_create_base_config() {
     SkipConfig* config = (SkipConfig*)malloc(sizeof(SkipConfig));
@@ -87,12 +90,16 @@ void* skip_create_base_config() {
     config->types = NULL;
     config->types_size = 0;
     config->types_capacity = 0;
+    if (ensure_capacity((void**)&config->types, &config->types_capacity, sizeof(SkipInternalType), SKIP_INITIAL_CAPACITY) != 0) {
+        free(config);
+        return NULL;
+    }
 
     config->offsets = NULL;
     config->offsets_size = 0;
     config->offsets_capacity = 0;
-
-    if (ensure_capacity((void**)&config->offsets, &config->offsets_capacity, sizeof(uint64_t), 1) != 0) {
+    if (ensure_capacity((void**)&config->offsets, &config->offsets_capacity, sizeof(uint64_t), SKIP_INITIAL_CAPACITY) != 0) {
+        free(config->types);
         free(config);
         return NULL;
     }
@@ -107,12 +114,14 @@ int skip_push_type_to_config(void* cfg, int32_t type_code, uint64_t count) {
 
     if (config->types_size == config->types_capacity) {
         uint64_t new_cap = config->types_capacity == 0 ? 8 : config->types_capacity * 2;
-        if (ensure_capacity((void**)&config->types, &config->types_capacity, sizeof(SkipInternalType), new_cap) != 0) return -1;
+        int ret = ensure_capacity((void**)&config->types, &config->types_capacity, sizeof(SkipInternalType), new_cap);
+        if (ret != SKIP_SUCCESS) return ret;
     }
 
     if (config->offsets_size == config->offsets_capacity) {
         uint64_t new_cap = config->offsets_capacity == 0 ? 8 : config->offsets_capacity * 2;
-        if (ensure_capacity((void**)&config->offsets, &config->offsets_capacity, sizeof(uint64_t), new_cap) != 0) return -1;
+        int ret = ensure_capacity((void**)&config->offsets, &config->offsets_capacity, sizeof(uint64_t), new_cap);
+        if (ret != SKIP_SUCCESS) return ret;
     }
 
     uint64_t type_size = skip_get_datatype_size(type_code);
@@ -125,7 +134,7 @@ int skip_push_type_to_config(void* cfg, int32_t type_code, uint64_t count) {
     config->offsets[config->offsets_size] = new_offset;
     config->offsets_size++;
 
-    return 0;
+    return SKIP_SUCCESS;
 }
 
 int skip_pop_type_from_config(void* cfg) {
@@ -134,7 +143,7 @@ int skip_pop_type_from_config(void* cfg) {
         config->types_size--;
         config->offsets_size--;
     }
-    return 0;
+    return SKIP_SUCCESS;
 }
 
 SkipInternalType* skip_get_type_at_index(void* cfg, uint64_t index) {
@@ -150,7 +159,7 @@ int skip_free_cfg(void* cfg) {
         free(config->offsets);
         free(config);
     }
-    return 0;
+    return SKIP_SUCCESS;
 }
 
 uint64_t skip_get_datatype_size(int32_t type_code) {
@@ -176,18 +185,22 @@ uint64_t skip_get_cfg_size(void* cfg) {
     return config->offsets[config->offsets_size - 1];
 }
 
-int skip_write_index_to_buffer(void* cfg, void* buffer, void* value, uint64_t index) {
+int skip_write_index_to_buffer(void* cfg, void* buffer, uint64_t buffer_size, void* value, uint64_t index) {
     SkipConfig* config = (SkipConfig*)cfg;
-    if (index >= config->types_size) return -1;
+    if (index >= config->types_size) return SKIP_ERROR_OUT_OF_BOUNDS;
 
     uint64_t offset = config->offsets[index];
     uint64_t type_size = skip_get_datatype_size(config->types[index].type_code);
     uint64_t count = config->types[index].count;
     int32_t type_code = config->types[index].type_code;
 
-    if (type_size == 1) {
-        memcpy((uint8_t*)buffer + offset, value, (size_t)count);
-        return 0;
+    if (offset + (type_size * count) > buffer_size) {
+        return SKIP_ERROR_BUFFER_TOO_SMALL;
+    }
+
+    if (type_size == 1 || !is_little_endian()) {
+        memcpy((uint8_t*)buffer + offset, value, (size_t)(count * type_size));
+        return SKIP_SUCCESS;
     }
 
     uint8_t* current_val_ptr = (uint8_t*)value;
@@ -218,23 +231,26 @@ int skip_write_index_to_buffer(void* cfg, void* buffer, void* value, uint64_t in
         current_val_ptr += type_size;
     }
 
-    return 0;
+    return SKIP_SUCCESS;
 }
 
 uint64_t skip_get_export_buffer_size(void* cfg) {
     SkipConfig* config = (SkipConfig*)cfg;
-    return sizeof(uint32_t) + (config->types_size * (sizeof(int32_t) + sizeof(uint64_t)));
+    return sizeof(uint32_t) + sizeof(uint32_t) + (config->types_size * (sizeof(int32_t) + sizeof(uint64_t)));
 }
 
 int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size) {
     SkipConfig* config = (SkipConfig*)cfg;
     uint64_t required_size = skip_get_export_buffer_size(cfg);
-    if (buffer_size < required_size) return -1;
+    if (buffer_size < required_size) return SKIP_ERROR_BUFFER_TOO_SMALL;
+
+    uint32_t version = host_to_network_uint32(SKIP_CONFIG_VERSION);
+    memcpy(buffer, &version, sizeof(uint32_t));
 
     uint32_t num_types = host_to_network_uint32((uint32_t)config->types_size);
-    memcpy(buffer, &num_types, sizeof(uint32_t));
+    memcpy(buffer + sizeof(uint32_t), &num_types, sizeof(uint32_t));
     
-    char* current_pos = buffer + sizeof(uint32_t);
+    char* current_pos = buffer + sizeof(uint32_t) + sizeof(uint32_t);
     for (uint64_t i = 0; i < config->types_size; ++i) {
         int32_t type_code = host_to_network_uint32(config->types[i].type_code);
         memcpy(current_pos, &type_code, sizeof(int32_t));
@@ -245,18 +261,28 @@ int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size) {
         current_pos += sizeof(uint64_t);
     }
     
-    return 0;
+    return SKIP_SUCCESS;
 }
 
-void* skip_import_cfg(const char* buffer) {
+void* skip_import_cfg(const char* buffer, uint64_t buffer_size) {
+    if (buffer_size < sizeof(uint32_t) * 2) return NULL;
+
+    uint32_t version_net;
+    memcpy(&version_net, buffer, sizeof(uint32_t));
+    uint32_t version = network_to_host_uint32(version_net);
+    if (version != SKIP_CONFIG_VERSION) return NULL;
+
     uint32_t num_types_net;
-    memcpy(&num_types_net, buffer, sizeof(uint32_t));
+    memcpy(&num_types_net, buffer + sizeof(uint32_t), sizeof(uint32_t));
     uint32_t num_types = network_to_host_uint32(num_types_net);
+
+    uint64_t expected_size = sizeof(uint32_t) + sizeof(uint32_t) + num_types * (sizeof(int32_t) + sizeof(uint64_t));
+    if (buffer_size < expected_size) return NULL;
 
     void* config_ptr = skip_create_base_config();
     if (!config_ptr) return NULL;
 
-    const char* current_pos = buffer + sizeof(uint32_t);
+    const char* current_pos = buffer + sizeof(uint32_t) + sizeof(uint32_t);
     for (uint32_t i = 0; i < num_types; ++i) {
         int32_t type_code_net;
         memcpy(&type_code_net, current_pos, sizeof(int32_t));
@@ -268,7 +294,7 @@ void* skip_import_cfg(const char* buffer) {
         uint64_t count = network_to_host_uint64(count_net);
         current_pos += sizeof(uint64_t);
         
-        if (skip_push_type_to_config(config_ptr, type_code, count) != 0) {
+        if (skip_push_type_to_config(config_ptr, type_code, count) != SKIP_SUCCESS) {
             skip_free_cfg(config_ptr);
             return NULL;
         }
@@ -284,18 +310,22 @@ void* skip_get_index_ptr(void* cfg, void* buffer, uint64_t index) {
     return (uint8_t*)buffer + offset;
 }
 
-int skip_read_index_from_buffer(void* cfg, void* buffer, void* value, uint64_t index) {
+int skip_read_index_from_buffer(void* cfg, void* buffer, uint64_t buffer_size, void* value, uint64_t index) {
     SkipConfig* config = (SkipConfig*)cfg;
-    if (index >= config->types_size) return -1;
+    if (index >= config->types_size) return SKIP_ERROR_OUT_OF_BOUNDS;
 
     uint64_t offset = config->offsets[index];
     uint64_t type_size = skip_get_datatype_size(config->types[index].type_code);
     uint64_t count = config->types[index].count;
     int32_t type_code = config->types[index].type_code;
 
-    if (type_size == 1) {
-        memcpy(value, (uint8_t*)buffer + offset, (size_t)count);
-        return 0;
+    if (offset + (type_size * count) > buffer_size) {
+        return SKIP_ERROR_BUFFER_TOO_SMALL;
+    }
+
+    if (type_size == 1 || !is_little_endian()) {
+        memcpy(value, (uint8_t*)buffer + offset, (size_t)(count * type_size));
+        return SKIP_SUCCESS;
     }
     
     uint8_t* current_val_ptr = (uint8_t*)value;
@@ -329,5 +359,5 @@ int skip_read_index_from_buffer(void* cfg, void* buffer, void* value, uint64_t i
         current_val_ptr += type_size;
     }
 
-    return 0;
+    return SKIP_SUCCESS;
 }
