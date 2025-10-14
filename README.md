@@ -84,8 +84,8 @@ This struct represents a type and its count within the SKIP configuration.
 
 ```c
 struct SkipInternalType {
-    int type_code;
-    size_t count;
+    int32_t type_code;
+    uint64_t count;
 };
 ```
 
@@ -100,7 +100,7 @@ Creates a new, empty SKIP configuration.
 
 - **Returns:** A pointer to the newly created config. This pointer should be freed using `skip_free_cfg` when it's no longer needed.
 
-#### `int skip_push_type_to_config(void* cfg, int type_code, size_t len)`
+#### `int skip_push_type_to_config(void* cfg, int32_t type_code, uint64_t len)`
 
 Adds a new data type entry to the end of the configuration.
 
@@ -118,7 +118,7 @@ Removes the last data type entry from the configuration.
     - `cfg`: A pointer to the SKIP config.
 - **Returns:** `0` on success.
 
-#### `SkipInternalType* skip_get_type_at_index(void* cfg, size_t index)`
+#### `SkipInternalType* skip_get_type_at_index(void* cfg, uint64_t index)`
 
 Retrieves the type information at a specific index in the configuration.
 
@@ -135,7 +135,7 @@ Frees the memory used by a SKIP configuration.
     - `cfg`: A pointer to the SKIP config.
 - **Returns:** `0` on success.
 
-#### `size_t skip_get_cfg_size(void* cfg)`
+#### `uint64_t skip_get_cfg_size(void* cfg)`
 
 Calculates the total size in bytes required for a buffer based on the current configuration.
 
@@ -143,7 +143,7 @@ Calculates the total size in bytes required for a buffer based on the current co
     - `cfg`: A pointer to the SKIP config.
 - **Returns:** The total buffer size in bytes.
 
-#### `size_t skip_get_datatype_size(int type_code)`
+#### `uint64_t skip_get_datatype_size(int32_t type_code)`
 
 Gets the size in bytes of a single element of a given data type.
 
@@ -151,7 +151,7 @@ Gets the size in bytes of a single element of a given data type.
     - `type_code`: The data type code from `SkipDataTypeCode`.
 - **Returns:** The size of the data type in bytes.
 
-#### `int skip_write_index_to_buffer(void* cfg, void* buffer, void* value, size_t index)`
+#### `int skip_write_index_to_buffer(void* cfg, void* buffer, void* value, uint64_t index)`
 
 Writes data to a specific index in the buffer, according to the configuration.
 
@@ -162,7 +162,7 @@ Writes data to a specific index in the buffer, according to the configuration.
     - `index`: The index in the config that specifies where and how to write the data.
 - **Returns:** `0` on success, `-1` if the index is out of bounds.
 
-#### `int skip_read_index_from_buffer(void* cfg, void* buffer, void* value, size_t index)`
+#### `int skip_read_index_from_buffer(void* cfg, void* buffer, void* value, uint64_t index)`
 
 Reads data from a specific index in the buffer, according to the configuration.
 
@@ -173,7 +173,7 @@ Reads data from a specific index in the buffer, according to the configuration.
     - `index`: The index in the config that specifies where and how to read the data.
 - **Returns:** `0` on success, `-1` if the index is out of bounds.
 
-#### `void* skip_get_index_ptr(void* cfg, void* buffer, size_t index)`
+#### `void* skip_get_index_ptr(void* cfg, void* buffer, uint64_t index)`
 
 Retrieves a direct pointer to the start of the data for a given index within the buffer. This is useful for in-place access to data without needing a separate copy.
 
@@ -183,7 +183,7 @@ Retrieves a direct pointer to the start of the data for a given index within the
     - `index`: The index in the config that specifies which data segment to point to.
 - **Returns:** A `void*` pointer to the data segment, or `nullptr` if the index is out of bounds.
 
-#### `size_t skip_get_export_buffer_size(void* cfg)`
+#### `uint64_t skip_get_export_buffer_size(void* cfg)`
 
 Calculates the size of the buffer needed to export the configuration.
 
@@ -191,7 +191,7 @@ Calculates the size of the buffer needed to export the configuration.
   - `cfg`: A pointer to the SKIP config.
 - **Returns:** The required buffer size in bytes.
 
-#### `int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size)`
+#### `int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size)`
 
 Exports the SKIP configuration to a buffer. This allows you to save the configuration and reuse it later, or send it over a network.
 
