@@ -15,6 +15,7 @@ The core of SKIP is the concept of a "config", which is a description of the dat
 - **Lightweight:** The SKIP library is small and has no external dependencies.
 - **Portability:** SKIP can be used with any programming language that can call C functions.
 - **Security:** As long as the SKIP config is not exposed, there is no way to decode the underlying data.
+- **Versioning:** The exported configuration format includes a version number, ensuring backward compatibility.
 
 ## Building
 
@@ -76,6 +77,28 @@ enum SkipDataTypeCode {
 - `skip_float32`: 4-byte single-precision float.
 - `skip_float64`: 8-byte double-precision float.
 - `skip_char`: 1-byte character.
+
+#### `SkipError`
+
+This enum defines the error codes returned by SKIP functions.
+
+```c
+enum SkipError {
+    SKIP_SUCCESS = 0,
+    SKIP_ERROR_INVALID_ARGUMENT = -1,
+    SKIP_ERROR_OUT_OF_BOUNDS = -2,
+    SKIP_ERROR_ALLOCATION_FAILED = -3,
+    SKIP_ERROR_BUFFER_TOO_SMALL = -4,
+    SKIP_ERROR_INVALID_CONFIG = -5,
+};
+```
+
+- `SKIP_SUCCESS`: The operation completed successfully.
+- `SKIP_ERROR_INVALID_ARGUMENT`: A function was called with an invalid argument.
+- `SKIP_ERROR_OUT_OF_BOUNDS`: An out-of-bounds access was attempted.
+- `SKIP_ERROR_ALLOCATION_FAILED`: A memory allocation failed.
+- `SKIP_ERROR_BUFFER_TOO_SMALL`: The provided buffer was too small to complete the operation.
+- `SKIP_ERROR_INVALID_CONFIG`: The provided configuration was invalid or corrupted.
 
 #### `SkipInternalType`
 
