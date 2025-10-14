@@ -27,10 +27,10 @@ void test_new_datatypes() {
     float f32 = 3.14f;
     int64_t i64 = -9000000000000000000;
 
-    skip_write_index_to_buffer(config, buffer, &i8, 0);
-    skip_write_index_to_buffer(config, buffer, &u16, 1);
-    skip_write_index_to_buffer(config, buffer, &f32, 2);
-    skip_write_index_to_buffer(config, buffer, &i64, 3);
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, &i8, 0) == SKIP_SUCCESS);
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, &u16, 1) == SKIP_SUCCESS);
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, &f32, 2) == SKIP_SUCCESS);
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, &i64, 3) == SKIP_SUCCESS);
 
     // --- Read data back and verify ---
     int8_t i8_res;
@@ -38,10 +38,10 @@ void test_new_datatypes() {
     float f32_res;
     int64_t i64_res;
 
-    skip_read_index_from_buffer(config, buffer, &i8_res, 0);
-    skip_read_index_from_buffer(config, buffer, &u16_res, 1);
-    skip_read_index_from_buffer(config, buffer, &f32_res, 2);
-    skip_read_index_from_buffer(config, buffer, &i64_res, 3);
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size, &i8_res, 0) == SKIP_SUCCESS);
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size, &u16_res, 1) == SKIP_SUCCESS);
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size, &f32_res, 2) == SKIP_SUCCESS);
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size, &i64_res, 3) == SKIP_SUCCESS);
 
     std::cout << "int8: " << (int)i8_res << " (expected " << (int)i8 << ")" << std::endl;
     assert(i8 == i8_res);
@@ -69,10 +69,10 @@ void test_char_type() {
     char* buffer = new char[buffer_size];
 
     char c = 'A';
-    skip_write_index_to_buffer(config, buffer, &c, 0);
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, &c, 0) == SKIP_SUCCESS);
 
     char c_res;
-    skip_read_index_from_buffer(config, buffer, &c_res, 0);
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size, &c_res, 0) == SKIP_SUCCESS);
 
     std::cout << "char: " << c_res << " (expected " << c << ")" << std::endl;
     assert(c == c_res);
@@ -100,8 +100,8 @@ void test_get_index_ptr() {
     // --- Write data ---
     const char* message = "Hello World";
     int32_t number = 2024;
-    skip_write_index_to_buffer(config, buffer, (void*)message, 0);
-    skip_write_index_to_buffer(config, buffer, &number, 1);
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, (void*)message, 0) == SKIP_SUCCESS);
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, &number, 1) == SKIP_SUCCESS);
 
 
     // --- Use skip_get_index_ptr to check pointers ---
@@ -121,7 +121,7 @@ void test_get_index_ptr() {
     // For multi-byte types, direct dereferencing is unsafe due to endianness.
     // Use the read function to verify the content was written correctly.
     int32_t number_read;
-    skip_read_index_from_buffer(config, buffer, &number_read, 1);
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size, &number_read, 1) == SKIP_SUCCESS);
     std::cout << "Number from read: " << number_read << " (expected " << number << ")" << std::endl;
     assert(number_read == number);
 
@@ -147,10 +147,11 @@ void test_import_export() {
     uint64_t buffer_size = skip_get_export_buffer_size(config);
     char* exported_buffer = new char[buffer_size];
     int export_result = skip_export_cfg(config, exported_buffer, buffer_size);
-    assert(export_result == 0);
+    assert(export_result == SKIP_SUCCESS);
 
-    void* imported_config = skip_import_cfg(exported_buffer);
+    void* imported_config = skip_import_cfg(exported_buffer, buffer_size);
 
+    assert(imported_config != NULL);
     assert(skip_get_cfg_size(config) == skip_get_cfg_size(imported_config));
 
     SkipInternalType* original_type = skip_get_type_at_index(config, 1);
@@ -179,7 +180,7 @@ void test_endianness() {
     char* buffer = new char[buffer_size];
 
     uint32_t original_value = 0x12345678;
-    skip_write_index_to_buffer(config, buffer, &original_value, 0);
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, &original_value, 0) == SKIP_SUCCESS);
 
     // Manually check the byte order in the buffer (should be big-endian)
     assert((unsigned char)buffer[0] == 0x12);
@@ -189,7 +190,7 @@ void test_endianness() {
     std::cout << "Byte order in buffer is correct (big-endian)." << std::endl;
 
     uint32_t read_value;
-    skip_read_index_from_buffer(config, buffer, &read_value, 0);
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size, &read_value, 0) == SKIP_SUCCESS);
 
     std::cout << "Read value: " << std::hex << read_value << " (expected " << original_value << ")" << std::endl;
     assert(original_value == read_value);
@@ -199,12 +200,55 @@ void test_endianness() {
     std::cout << "--- Test Passed ---" << std::endl << std::endl;
 }
 
+void test_error_handling() {
+    std::cout << "--- Testing Error Handling ---" << std::endl;
+
+    void* config = skip_create_base_config();
+    skip_push_type_to_config(config, skip_int32, 1);
+
+    uint64_t buffer_size = skip_get_cfg_size(config);
+    char* buffer = new char[buffer_size];
+
+    // Test writing to a buffer that is too small
+    int32_t value = 123;
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size - 1, &value, 0) == SKIP_ERROR_BUFFER_TOO_SMALL);
+    std::cout << "Buffer too small write test passed." << std::endl;
+
+    // Test reading from a buffer that is too small
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size - 1, &value, 0) == SKIP_ERROR_BUFFER_TOO_SMALL);
+    std::cout << "Buffer too small read test passed." << std::endl;
+
+    // Test out of bounds access
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, &value, 1) == SKIP_ERROR_OUT_OF_BOUNDS);
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size, &value, 1) == SKIP_ERROR_OUT_OF_BOUNDS);
+    std::cout << "Out of bounds access test passed." << std::endl;
+
+    // Test exporting to a buffer that is too small
+    uint64_t export_buffer_size = skip_get_export_buffer_size(config);
+    char* export_buffer = new char[export_buffer_size];
+    assert(skip_export_cfg(config, export_buffer, export_buffer_size - 1) == SKIP_ERROR_BUFFER_TOO_SMALL);
+    std::cout << "Export buffer too small test passed." << std::endl;
+
+    // Test importing from a buffer that is too small
+    assert(skip_import_cfg(export_buffer, sizeof(uint32_t) - 1) == NULL);
+    skip_export_cfg(config, export_buffer, export_buffer_size);
+    assert(skip_import_cfg(export_buffer, export_buffer_size - 1) == NULL);
+    std::cout << "Import buffer too small test passed." << std::endl;
+
+
+    skip_free_cfg(config);
+    delete[] buffer;
+    delete[] export_buffer;
+    std::cout << "--- Test Passed ---" << std::endl << std::endl;
+}
+
 int main() {
     test_new_datatypes();
     test_get_index_ptr();
     test_char_type();
     test_import_export();
     test_endianness();
+    test_error_handling();
 
     std::cout << "All tests passed!" << std::endl;
 
