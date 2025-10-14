@@ -3,19 +3,74 @@
 #include <string.h>
 #include "skip.h"
 
+
+static int is_little_endian() {
+    volatile uint32_t i = 0x01234567;
+    return (*((volatile uint8_t*)(&i))) == 0x67;
+}
+
+static uint16_t swap_uint16(uint16_t val) {
+    return (val << 8) | (val >> 8);
+}
+
+static uint32_t swap_uint32(uint32_t val) {
+    val = ((val << 8) & 0xFF00FF00) | ((val >> 8) & 0xFF00FF);
+    return (val << 16) | (val >> 16);
+}
+
+static uint64_t swap_uint64(uint64_t val) {
+    val = ((val << 8) & 0xFF00FF00FF00FF00ULL) | ((val >> 8) & 0x00FF00FF00FF00FFULL);
+    val = ((val << 16) & 0xFFFF0000FFFF0000ULL) | ((val >> 16) & 0x0000FFFF0000FFFFULL);
+    return (val << 32) | (val >> 32);
+}
+
+static uint64_t host_to_network_uint64(uint64_t host_long_long) {
+    if (is_little_endian()) {
+        return swap_uint64(host_long_long);
+    }
+    return host_long_long;
+}
+
+static uint32_t host_to_network_uint32(uint32_t host_long) {
+    if (is_little_endian()) {
+        return swap_uint32(host_long);
+    }
+    return host_long;
+}
+
+static uint16_t host_to_network_uint16(uint16_t host_short) {
+    if (is_little_endian()) {
+        return swap_uint16(host_short);
+    }
+    return host_short;
+}
+
+static uint64_t network_to_host_uint64(uint64_t network_long_long) {
+    return host_to_network_uint64(network_long_long);
+}
+
+static uint32_t network_to_host_uint32(uint32_t network_long) {
+    return host_to_network_uint32(network_long);
+}
+
+static uint16_t network_to_host_uint16(uint16_t network_short) {
+    return host_to_network_uint16(network_short);
+}
+
+
 typedef struct {
     SkipInternalType* types;
-    size_t types_size;
-    size_t types_capacity;
+    uint64_t types_size;
+    uint64_t types_capacity;
 
-    size_t* offsets;
-    size_t offsets_size;
-    size_t offsets_capacity;
+    uint64_t* offsets;
+    uint64_t offsets_size;
+    uint64_t offsets_capacity;
 } SkipConfig;
 
-static int ensure_capacity(void** array, size_t* capacity, size_t element_size, size_t new_capacity) {
+static int ensure_capacity(void** array, uint64_t* capacity, uint64_t element_size, uint64_t new_capacity) {
     if (*capacity < new_capacity) {
-        void* new_array = realloc(*array, new_capacity * element_size);
+        void* new_array = realloc(*array, (size_t)(new_capacity * element_size));
         if (!new_array) {
             return -1; // Allocation failed
         }
@@ -37,7 +92,7 @@ void* skip_create_base_config() {
     config->offsets_size = 0;
     config->offsets_capacity = 0;
 
-    if (ensure_capacity((void**)&config->offsets, &config->offsets_capacity, sizeof(size_t), 1) != 0) {
+    if (ensure_capacity((void**)&config->offsets, &config->offsets_capacity, sizeof(uint64_t), 1) != 0) {
         free(config);
         return NULL;
     }
@@ -47,21 +102,21 @@ void* skip_create_base_config() {
     return config;
 }
 
-int skip_push_type_to_config(void* cfg, int type_code, size_t count) {
+int skip_push_type_to_config(void* cfg, int32_t type_code, uint64_t count) {
     SkipConfig* config = (SkipConfig*)cfg;
 
     if (config->types_size == config->types_capacity) {
-        size_t new_cap = config->types_capacity == 0 ? 8 : config->types_capacity * 2;
+        uint64_t new_cap = config->types_capacity == 0 ? 8 : config->types_capacity * 2;
         if (ensure_capacity((void**)&config->types, &config->types_capacity, sizeof(SkipInternalType), new_cap) != 0) return -1;
     }
 
     if (config->offsets_size == config->offsets_capacity) {
-        size_t new_cap = config->offsets_capacity == 0 ? 8 : config->offsets_capacity * 2;
-        if (ensure_capacity((void**)&config->offsets, &config->offsets_capacity, sizeof(size_t), new_cap) != 0) return -1;
+        uint64_t new_cap = config->offsets_capacity == 0 ? 8 : config->offsets_capacity * 2;
+        if (ensure_capacity((void**)&config->offsets, &config->offsets_capacity, sizeof(uint64_t), new_cap) != 0) return -1;
     }
 
-    size_t type_size = skip_get_datatype_size(type_code);
-    size_t new_offset = config->offsets[config->offsets_size - 1] + (type_size * count);
+    uint64_t type_size = skip_get_datatype_size(type_code);
+    uint64_t new_offset = config->offsets[config->offsets_size - 1] + (type_size * count);
 
     config->types[config->types_size].type_code = type_code;
     config->types[config->types_size].count = count;
@@ -82,7 +137,7 @@ int skip_pop_type_from_config(void* cfg) {
     return 0;
 }
 
-SkipInternalType* skip_get_type_at_index(void* cfg, size_t index) {
+SkipInternalType* skip_get_type_at_index(void* cfg, uint64_t index) {
     SkipConfig* config = (SkipConfig*)cfg;
     if (index >= config->types_size) return NULL;
     return &config->types[index];
@@ -98,7 +153,7 @@ int skip_free_cfg(void* cfg) {
     return 0;
 }
 
-size_t skip_get_datatype_size(int type_code) {
+uint64_t skip_get_datatype_size(int32_t type_code) {
     switch (type_code) {
         case skip_int8: return 1;
         case skip_uint8: return 1;
@@ -115,41 +170,78 @@ size_t skip_get_datatype_size(int type_code) {
     }
 }
 
-size_t skip_get_cfg_size(void* cfg) {
+uint64_t skip_get_cfg_size(void* cfg) {
     SkipConfig* config = (SkipConfig*)cfg;
     if (config->offsets_size == 0) return 0;
     return config->offsets[config->offsets_size - 1];
 }
 
-int skip_write_index_to_buffer(void* cfg, void* buffer, void* value, size_t index) {
+int skip_write_index_to_buffer(void* cfg, void* buffer, void* value, uint64_t index) {
     SkipConfig* config = (SkipConfig*)cfg;
     if (index >= config->types_size) return -1;
 
-    size_t offset = config->offsets[index];
-    size_t type_size = skip_get_datatype_size(config->types[index].type_code);
-    size_t value_len = type_size * config->types[index].count;
-    memcpy((uint8_t*)buffer + offset, value, value_len);
+    uint64_t offset = config->offsets[index];
+    uint64_t type_size = skip_get_datatype_size(config->types[index].type_code);
+    uint64_t count = config->types[index].count;
+    int32_t type_code = config->types[index].type_code;
+
+    if (type_size == 1) {
+        memcpy((uint8_t*)buffer + offset, value, (size_t)count);
+        return 0;
+    }
+
+    uint8_t* current_val_ptr = (uint8_t*)value;
+    for (uint64_t i = 0; i < count; ++i) {
+        uint64_t current_offset = offset + (i * type_size);
+        switch (type_code) {
+            case skip_int16:
+            case skip_uint16: {
+                uint16_t val = host_to_network_uint16(*(uint16_t*)current_val_ptr);
+                memcpy((uint8_t*)buffer + current_offset, &val, sizeof(uint16_t));
+                break;
+            }
+            case skip_int32:
+            case skip_uint32:
+            case skip_float32: {
+                uint32_t val = host_to_network_uint32(*(uint32_t*)current_val_ptr);
+                memcpy((uint8_t*)buffer + current_offset, &val, sizeof(uint32_t));
+                break;
+            }
+            case skip_int64:
+            case skip_uint64:
+            case skip_float64: {
+                uint64_t val = host_to_network_uint64(*(uint64_t*)current_val_ptr);
+                memcpy((uint8_t*)buffer + current_offset, &val, sizeof(uint64_t));
+                break;
+            }
+        }
+        current_val_ptr += type_size;
+    }
+
     return 0;
 }
 
-size_t skip_get_export_buffer_size(void* cfg) {
+uint64_t skip_get_export_buffer_size(void* cfg) {
     SkipConfig* config = (SkipConfig*)cfg;
     return sizeof(uint32_t) + (config->types_size * (sizeof(int32_t) + sizeof(uint64_t)));
 }
 
-int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size) {
+int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size) {
     SkipConfig* config = (SkipConfig*)cfg;
-    size_t required_size = skip_get_export_buffer_size(cfg);
+    uint64_t required_size = skip_get_export_buffer_size(cfg);
     if (buffer_size < required_size) return -1;
 
-    uint32_t num_types = (uint32_t)config->types_size;
-    *(uint32_t*)buffer = num_types;
+    uint32_t num_types = host_to_network_uint32((uint32_t)config->types_size);
+    memcpy(buffer, &num_types, sizeof(uint32_t));
     
     char* current_pos = buffer + sizeof(uint32_t);
-    for (size_t i = 0; i < num_types; ++i) {
-        *(int32_t*)current_pos = (int32_t)config->types[i].type_code;
+    for (uint64_t i = 0; i < config->types_size; ++i) {
+        int32_t type_code = host_to_network_uint32(config->types[i].type_code);
+        memcpy(current_pos, &type_code, sizeof(int32_t));
         current_pos += sizeof(int32_t);
-        *(uint64_t*)current_pos = (uint64_t)config->types[i].count;
+        
+        uint64_t count = host_to_network_uint64(config->types[i].count);
+        memcpy(current_pos, &count, sizeof(uint64_t));
         current_pos += sizeof(uint64_t);
     }
     
@@ -157,18 +249,26 @@ int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size) {
 }
 
 void* skip_import_cfg(const char* buffer) {
-    uint32_t num_types = *(const uint32_t*)buffer;
+    uint32_t num_types_net;
+    memcpy(&num_types_net, buffer, sizeof(uint32_t));
+    uint32_t num_types = network_to_host_uint32(num_types_net);
+
     void* config_ptr = skip_create_base_config();
     if (!config_ptr) return NULL;
 
     const char* current_pos = buffer + sizeof(uint32_t);
     for (uint32_t i = 0; i < num_types; ++i) {
-        int32_t type_code = *(const int32_t*)current_pos;
+        int32_t type_code_net;
+        memcpy(&type_code_net, current_pos, sizeof(int32_t));
+        int32_t type_code = network_to_host_uint32(type_code_net);
         current_pos += sizeof(int32_t);
-        uint64_t count = *(const uint64_t*)current_pos;
+
+        uint64_t count_net;
+        memcpy(&count_net, current_pos, sizeof(uint64_t));
+        uint64_t count = network_to_host_uint64(count_net);
         current_pos += sizeof(uint64_t);
         
-        if (skip_push_type_to_config(config_ptr, type_code, (size_t)count) != 0) {
+        if (skip_push_type_to_config(config_ptr, type_code, count) != 0) {
             skip_free_cfg(config_ptr);
             return NULL;
         }
@@ -177,19 +277,57 @@ void* skip_import_cfg(const char* buffer) {
     return config_ptr;
 }
 
-void* skip_get_index_ptr(void* cfg, void* buffer, size_t index) {
+void* skip_get_index_ptr(void* cfg, void* buffer, uint64_t index) {
     SkipConfig* config = (SkipConfig*)cfg;
     if (index >= config->types_size) return NULL;
-    size_t offset = config->offsets[index];
+    uint64_t offset = config->offsets[index];
     return (uint8_t*)buffer + offset;
 }
 
-int skip_read_index_from_buffer(void* cfg, void* buffer, void* value, size_t index) {
+int skip_read_index_from_buffer(void* cfg, void* buffer, void* value, uint64_t index) {
     SkipConfig* config = (SkipConfig*)cfg;
     if (index >= config->types_size) return -1;
-    size_t offset = config->offsets[index];
-    size_t type_size = skip_get_datatype_size(config->types[index].type_code);
-    size_t value_len = type_size * config->types[index].count;
-    memcpy(value, (uint8_t*)buffer + offset, value_len);
+
+    uint64_t offset = config->offsets[index];
+    uint64_t type_size = skip_get_datatype_size(config->types[index].type_code);
+    uint64_t count = config->types[index].count;
+    int32_t type_code = config->types[index].type_code;
+
+    if (type_size == 1) {
+        memcpy(value, (uint8_t*)buffer + offset, (size_t)count);
+        return 0;
+    }
+    
+    uint8_t* current_val_ptr = (uint8_t*)value;
+    for (uint64_t i = 0; i < count; ++i) {
+        uint64_t current_offset = offset + (i * type_size);
+        switch (type_code) {
+            case skip_int16:
+            case skip_uint16: {
+                uint16_t net_val;
+                memcpy(&net_val, (uint8_t*)buffer + current_offset, sizeof(uint16_t));
+                *(uint16_t*)current_val_ptr = network_to_host_uint16(net_val);
+                break;
+            }
+            case skip_int32:
+            case skip_uint32:
+            case skip_float32: {
+                uint32_t net_val;
+                memcpy(&net_val, (uint8_t*)buffer + current_offset, sizeof(uint32_t));
+                *(uint32_t*)current_val_ptr = network_to_host_uint32(net_val);
+                break;
+            }
+            case skip_int64:
+            case skip_uint64:
+            case skip_float64: {
+                uint64_t net_val;
+                memcpy(&net_val, (uint8_t*)buffer + current_offset, sizeof(uint64_t));
+                *(uint64_t*)current_val_ptr = network_to_host_uint64(net_val);
+                break;
+            }
+        }
+        current_val_ptr += type_size;
+    }
+
     return 0;
 }
