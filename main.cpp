@@ -15,7 +15,7 @@ void test_new_datatypes() {
     skip_push_type_to_config(config, skip_float32, 1);
     skip_push_type_to_config(config, skip_int64, 1);
 
-    size_t buffer_size = skip_get_cfg_size(config);
+    uint64_t buffer_size = skip_get_cfg_size(config);
     std::cout << "Buffer size: " << buffer_size << std::endl;
     assert(buffer_size == 1 + 2 + 4 + 8);
 
@@ -63,7 +63,7 @@ void test_char_type() {
     void* config = skip_create_base_config();
     skip_push_type_to_config(config, skip_char, 1);
 
-    size_t buffer_size = skip_get_cfg_size(config);
+    uint64_t buffer_size = skip_get_cfg_size(config);
     assert(buffer_size == 1);
 
     char* buffer = new char[buffer_size];
@@ -91,7 +91,7 @@ void test_get_index_ptr() {
     skip_push_type_to_config(config, skip_uint8, 13); // "Hello World"
     skip_push_type_to_config(config, skip_int32, 1);
 
-    size_t buffer_size = skip_get_cfg_size(config);
+    uint64_t buffer_size = skip_get_cfg_size(config);
      std::cout << "Buffer size: " << buffer_size << std::endl;
     assert(buffer_size == 13 + 4);
 
@@ -104,14 +104,26 @@ void test_get_index_ptr() {
     skip_write_index_to_buffer(config, buffer, &number, 1);
 
 
-    // --- Use skip_get_index_ptr to read data ---
+    // --- Use skip_get_index_ptr to check pointers ---
     char* msg_ptr = (char*)skip_get_index_ptr(config, buffer, 0);
     int32_t* num_ptr = (int32_t*)skip_get_index_ptr(config, buffer, 1);
+    
+    // Check that the pointers point to the correct offsets
+    assert(msg_ptr == &buffer[0]);
+    assert((char*)num_ptr == &buffer[13]);
+    std::cout << "Pointer offsets are correct." << std::endl;
 
+    // --- Verify content using pointers (where safe) and read functions ---
+    // Direct string comparison is safe for char arrays
     std::cout << "Message from ptr: " << msg_ptr << " (expected " << message << ")" << std::endl;
     assert(strcmp(msg_ptr, message) == 0);
-    std::cout << "Number from ptr: " << *num_ptr << " (expected " << number << ")" << std::endl;
-    assert(*num_ptr == number);
+    
+    // For multi-byte types, direct dereferencing is unsafe due to endianness.
+    // Use the read function to verify the content was written correctly.
+    int32_t number_read;
+    skip_read_index_from_buffer(config, buffer, &number_read, 1);
+    std::cout << "Number from read: " << number_read << " (expected " << number << ")" << std::endl;
+    assert(number_read == number);
 
     // --- Test out of bounds ---
     void* null_ptr = skip_get_index_ptr(config, buffer, 2);
@@ -132,7 +144,7 @@ void test_import_export() {
     skip_push_type_to_config(config, skip_float64, 2);
     skip_push_type_to_config(config, skip_char, 10);
 
-    size_t buffer_size = skip_get_export_buffer_size(config);
+    uint64_t buffer_size = skip_get_export_buffer_size(config);
     char* exported_buffer = new char[buffer_size];
     int export_result = skip_export_cfg(config, exported_buffer, buffer_size);
     assert(export_result == 0);
@@ -157,11 +169,42 @@ void test_import_export() {
 }
 
 
+void test_endianness() {
+    std::cout << "--- Testing Endianness ---" << std::endl;
+
+    void* config = skip_create_base_config();
+    skip_push_type_to_config(config, skip_uint32, 1);
+
+    uint64_t buffer_size = skip_get_cfg_size(config);
+    char* buffer = new char[buffer_size];
+
+    uint32_t original_value = 0x12345678;
+    skip_write_index_to_buffer(config, buffer, &original_value, 0);
+
+    // Manually check the byte order in the buffer (should be big-endian)
+    assert((unsigned char)buffer[0] == 0x12);
+    assert((unsigned char)buffer[1] == 0x34);
+    assert((unsigned char)buffer[2] == 0x56);
+    assert((unsigned char)buffer[3] == 0x78);
+    std::cout << "Byte order in buffer is correct (big-endian)." << std::endl;
+
+    uint32_t read_value;
+    skip_read_index_from_buffer(config, buffer, &read_value, 0);
+
+    std::cout << "Read value: " << std::hex << read_value << " (expected " << original_value << ")" << std::endl;
+    assert(original_value == read_value);
+
+    skip_free_cfg(config);
+    delete[] buffer;
+    std::cout << "--- Test Passed ---" << std::endl << std::endl;
+}
+
 int main() {
     test_new_datatypes();
     test_get_index_ptr();
     test_char_type();
     test_import_export();
+    test_endianness();
 
     std::cout << "All tests passed!" << std::endl;
 
