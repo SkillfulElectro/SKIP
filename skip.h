@@ -29,29 +29,29 @@ typedef struct SkipInternalType {
 
 void* skip_create_base_config();
 
-int skip_push_type_to_config(void* cfg , int type_code , size_t len);
+int skip_push_type_to_config(void* cfg , int32_t type_code , uint64_t len);
 
 int skip_pop_type_from_config(void* cfg);
 
-SkipInternalType* skip_get_type_at_index(void* cfg , size_t index);
+SkipInternalType* skip_get_type_at_index(void* cfg , uint64_t index);
 
 int skip_free_cfg(void* cfg);
 
-size_t skip_get_cfg_size(void* cfg);
+uint64_t skip_get_cfg_size(void* cfg);
 
-size_t skip_get_datatype_size(int type_code);
+uint64_t skip_get_datatype_size(int32_t type_code);
 
-int skip_write_index_to_buffer(void* cfg , void* buffer , void* value , size_t index);
+int skip_write_index_to_buffer(void* cfg , void* buffer , void* value , uint64_t index);
 
-int skip_read_index_from_buffer(void* cfg , void* buffer , void* value , size_t index);
+int skip_read_index_from_buffer(void* cfg , void* buffer , void* value , uint64_t index);
 
-void* skip_get_index_ptr(void* cfg, void* buffer, size_t index);
+void* skip_get_index_ptr(void* cfg, void* buffer, uint64_t index);
 
 void* skip_import_cfg(const char* cfg);
 
-size_t skip_get_export_buffer_size(void* cfg);
+uint64_t skip_get_export_buffer_size(void* cfg);
 
-int skip_export_cfg(void* cfg, char* buffer, size_t buffer_size);
+int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size);
 
 #ifdef __cplusplus
 }
