@@ -66,6 +66,7 @@ typedef struct {
     uint64_t* offsets;
     uint64_t offsets_size;
     uint64_t offsets_capacity;
+    int endian;
 } SkipConfig;
 
 static int ensure_capacity(void** array, uint64_t* capacity, uint64_t element_size, uint64_t new_capacity) {
@@ -106,7 +107,25 @@ void* skip_create_base_config() {
     config->offsets[0] = 0;
     config->offsets_size = 1;
 
+    config->endian = SKIP_LITTLE_ENDIAN;
+
     return config;
+}
+
+int skip_get_system_endian() {
+    return is_little_endian() ? SKIP_LITTLE_ENDIAN : SKIP_BIG_ENDIAN;
+}
+
+int skip_set_endian_value_cfg(void* cfg, int endian) {
+    if (!cfg) {
+        return SKIP_ERROR_INVALID_ARGUMENT;
+    }
+    SkipConfig* config = (SkipConfig*)cfg;
+    if (endian != SKIP_BIG_ENDIAN && endian != SKIP_LITTLE_ENDIAN) {
+        return SKIP_ERROR_INVALID_ARGUMENT;
+    }
+    config->endian = endian;
+    return SKIP_SUCCESS;
 }
 
 int skip_push_type_to_config(void* cfg, int32_t type_code, uint64_t count) {
@@ -198,7 +217,10 @@ int skip_write_index_to_buffer(void* cfg, void* buffer, uint64_t buffer_size, vo
         return SKIP_ERROR_BUFFER_TOO_SMALL;
     }
 
-    if (type_size == 1 || !is_little_endian()) {
+    int system_endian = skip_get_system_endian();
+    int config_endian = config->endian;
+
+    if (type_size == 1 || system_endian == config_endian) {
         memcpy((uint8_t*)buffer + offset, value, (size_t)(count * type_size));
         return SKIP_SUCCESS;
     }
@@ -236,7 +258,7 @@ int skip_write_index_to_buffer(void* cfg, void* buffer, uint64_t buffer_size, vo
 
 uint64_t skip_get_export_buffer_size(void* cfg) {
     SkipConfig* config = (SkipConfig*)cfg;
-    return sizeof(uint32_t) + sizeof(uint32_t) + (config->types_size * (sizeof(int32_t) + sizeof(uint64_t)));
+    return sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t) + (config->types_size * (sizeof(int32_t) + sizeof(uint64_t)));
 }
 
 int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size) {
@@ -247,10 +269,12 @@ int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size) {
     uint32_t version = host_to_network_uint32(SKIP_CONFIG_VERSION);
     memcpy(buffer, &version, sizeof(uint32_t));
 
+    buffer[sizeof(uint32_t)] = (char)config->endian;
+
     uint32_t num_types = host_to_network_uint32((uint32_t)config->types_size);
-    memcpy(buffer + sizeof(uint32_t), &num_types, sizeof(uint32_t));
+    memcpy(buffer + sizeof(uint32_t) + sizeof(char), &num_types, sizeof(uint32_t));
     
-    char* current_pos = buffer + sizeof(uint32_t) + sizeof(uint32_t);
+    char* current_pos = buffer + sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t);
     for (uint64_t i = 0; i < config->types_size; ++i) {
         int32_t type_code = host_to_network_uint32(config->types[i].type_code);
         memcpy(current_pos, &type_code, sizeof(int32_t));
@@ -265,24 +289,28 @@ int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size) {
 }
 
 void* skip_import_cfg(const char* buffer, uint64_t buffer_size) {
-    if (buffer_size < sizeof(uint32_t) * 2) return NULL;
+    if (buffer_size < sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t)) return NULL;
 
     uint32_t version_net;
     memcpy(&version_net, buffer, sizeof(uint32_t));
     uint32_t version = network_to_host_uint32(version_net);
     if (version != SKIP_CONFIG_VERSION) return NULL;
 
+    int endian = (int)buffer[sizeof(uint32_t)];
+
     uint32_t num_types_net;
-    memcpy(&num_types_net, buffer + sizeof(uint32_t), sizeof(uint32_t));
+    memcpy(&num_types_net, buffer + sizeof(uint32_t) + sizeof(char), sizeof(uint32_t));
     uint32_t num_types = network_to_host_uint32(num_types_net);
 
-    uint64_t expected_size = sizeof(uint32_t) + sizeof(uint32_t) + num_types * (sizeof(int32_t) + sizeof(uint64_t));
+    uint64_t expected_size = sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t) + num_types * (sizeof(int32_t) + sizeof(uint64_t));
     if (buffer_size < expected_size) return NULL;
 
     void* config_ptr = skip_create_base_config();
     if (!config_ptr) return NULL;
 
-    const char* current_pos = buffer + sizeof(uint32_t) + sizeof(uint32_t);
+    skip_set_endian_value_cfg(config_ptr, endian);
+
+    const char* current_pos = buffer + sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t);
     for (uint32_t i = 0; i < num_types; ++i) {
         int32_t type_code_net;
         memcpy(&type_code_net, current_pos, sizeof(int32_t));
@@ -323,7 +351,10 @@ int skip_read_index_from_buffer(void* cfg, void* buffer, uint64_t buffer_size, v
         return SKIP_ERROR_BUFFER_TOO_SMALL;
     }
 
-    if (type_size == 1 || !is_little_endian()) {
+    int system_endian = skip_get_system_endian();
+    int config_endian = config->endian;
+
+    if (type_size == 1 || system_endian == config_endian) {
         memcpy(value, (uint8_t*)buffer + offset, (size_t)(count * type_size));
         return SKIP_SUCCESS;
     }
