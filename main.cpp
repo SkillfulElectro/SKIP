@@ -182,12 +182,12 @@ void test_endianness() {
     uint32_t original_value = 0x12345678;
     assert(skip_write_index_to_buffer(config, buffer, buffer_size, &original_value, 0) == SKIP_SUCCESS);
 
-    // Manually check the byte order in the buffer (should be big-endian)
-    assert((unsigned char)buffer[0] == 0x12);
-    assert((unsigned char)buffer[1] == 0x34);
-    assert((unsigned char)buffer[2] == 0x56);
-    assert((unsigned char)buffer[3] == 0x78);
-    std::cout << "Byte order in buffer is correct (big-endian)." << std::endl;
+    // Manually check the byte order in the buffer (should be little-endian by default)
+    assert((unsigned char)buffer[0] == 0x78);
+    assert((unsigned char)buffer[1] == 0x56);
+    assert((unsigned char)buffer[2] == 0x34);
+    assert((unsigned char)buffer[3] == 0x12);
+    std::cout << "Byte order in buffer is correct (little-endian)." << std::endl;
 
     uint32_t read_value;
     assert(skip_read_index_from_buffer(config, buffer, buffer_size, &read_value, 0) == SKIP_SUCCESS);
@@ -242,9 +242,67 @@ void test_error_handling() {
     std::cout << "--- Test Passed ---" << std::endl << std::endl;
 }
 
+void test_endianness_config() {
+    std::cout << "--- Testing Endianness Configuration ---" << std::endl;
+
+    void* config = skip_create_base_config();
+    skip_push_type_to_config(config, skip_uint32, 1);
+
+    // Test setting to big-endian
+    skip_set_endian_value_cfg(config, SKIP_BIG_ENDIAN);
+    uint64_t buffer_size = skip_get_cfg_size(config);
+    char* buffer = new char[buffer_size];
+    uint32_t original_value = 0x12345678;
+
+    assert(skip_write_index_to_buffer(config, buffer, buffer_size, &original_value, 0) == SKIP_SUCCESS);
+
+    if (skip_get_system_endian() == SKIP_LITTLE_ENDIAN) {
+        assert((unsigned char)buffer[0] == 0x12);
+        assert((unsigned char)buffer[1] == 0x34);
+        assert((unsigned char)buffer[2] == 0x56);
+        assert((unsigned char)buffer[3] == 0x78);
+        std::cout << "Big-endian write on little-endian system is correct." << std::endl;
+    }
+
+    uint32_t read_value;
+    assert(skip_read_index_from_buffer(config, buffer, buffer_size, &read_value, 0) == SKIP_SUCCESS);
+    assert(original_value == read_value);
+    std::cout << "Big-endian read is correct." << std::endl;
+
+    // Test import/export preserves endianness
+    uint64_t export_buffer_size = skip_get_export_buffer_size(config);
+    char* export_buffer = new char[export_buffer_size];
+    assert(skip_export_cfg(config, export_buffer, export_buffer_size) == SKIP_SUCCESS);
+    void* imported_config = skip_import_cfg(export_buffer, export_buffer_size);
+    assert(imported_config != NULL);
+
+    // Use the imported config to write a value and check if the byte order is correct.
+    // This behaviorally verifies that the endianness setting was imported correctly.
+    char* verification_buffer = new char[buffer_size];
+    uint32_t verification_value = 0xAABBCCDD;
+    assert(skip_write_index_to_buffer(imported_config, verification_buffer, buffer_size, &verification_value, 0) == SKIP_SUCCESS);
+
+    if (skip_get_system_endian() == SKIP_LITTLE_ENDIAN) {
+        assert((unsigned char)verification_buffer[0] == 0xAA);
+        assert((unsigned char)verification_buffer[1] == 0xBB);
+        assert((unsigned char)verification_buffer[2] == 0xCC);
+        assert((unsigned char)verification_buffer[3] == 0xDD);
+    }
+    std::cout << "Import/export correctly preserves endianness setting." << std::endl;
+    delete[] verification_buffer;
+
+
+    delete[] buffer;
+    delete[] export_buffer;
+    skip_free_cfg(config);
+    skip_free_cfg(imported_config);
+    std::cout << "--- Test Passed ---" << std::endl << std::endl;
+}
+
 int main() {
     test_new_datatypes();
     test_get_index_ptr();
+    test_endianness_config();
     test_char_type();
     test_import_export();
     test_endianness();
