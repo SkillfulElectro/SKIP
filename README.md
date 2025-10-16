@@ -13,9 +13,10 @@ The core of SKIP is the concept of a "config", which is a description of the dat
 - **Simplicity:** SKIP is designed to be easy to use, with a minimal API.
 - **Speed:** SKIP is written in C++ and is designed for performance.
 - **Lightweight:** The SKIP library is small and has no external dependencies.
-- **Portability:** SKIP can be used with any programming language that can call C functions.
+- **Portability:** SKIP can be used with any programming language that can call C functions. The serialization format is platform-independent and supports both Big-Endian and Little-Endian byte orders.
 - **Security:** As long as the SKIP config is not exposed, there is no way to decode the underlying data.
-- **Versioning:** The exported configuration format includes a version number, ensuring backward compatibility.
+- **Versioning:** The exported configuration format includes a version number and endianness information, ensuring backward compatibility.
+- **Configurable Endianness:** By default, SKIP uses the system's native endianness for serialization, but you can explicitly set it to either big-endian or little-endian, ensuring consistent data representation across different systems.
 
 ## Building
 
@@ -77,6 +78,17 @@ enum SkipDataTypeCode {
 - `skip_float32`: 4-byte single-precision float.
 - `skip_float64`: 8-byte double-precision float.
 - `skip_char`: 1-byte character.
+
+#### `SkipEndian`
+
+This enum defines the endianness options for data serialization.
+
+```c
+enum SkipEndian {
+    SKIP_BIG_ENDIAN = 0,
+    SKIP_LITTLE_ENDIAN = 1
+};
+```
 
 #### `SkipError`
 
@@ -235,6 +247,21 @@ Imports a SKIP configuration from a buffer.
   - `buffer`: The buffer to read the configuration from.
   - `buffer_size`: The size of the buffer.
 - **Returns:** A pointer to a new SKIP config, or `nullptr` on failure.
+
+#### `int skip_get_system_endian()`
+
+Detects the endianness of the host machine.
+
+- **Returns:** `SKIP_BIG_ENDIAN` or `SKIP_LITTLE_ENDIAN`.
+
+#### `int skip_set_endian_value_cfg(void* cfg, int endian)`
+
+Sets the desired endianness for the SKIP configuration. This will affect how multi-byte data is written to and read from buffers.
+
+- **Parameters:**
+  - `cfg`: A pointer to the SKIP config.
+  - `endian`: The desired endianness, either `SKIP_BIG_ENDIAN` or `SKIP_LITTLE_ENDIAN`.
+- **Returns:** `SKIP_SUCCESS` on success.
 
 ## Usage Example
 
