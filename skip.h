@@ -8,6 +8,11 @@
 extern "C" {
 #endif
 
+enum SkipEndian {
+    SKIP_BIG_ENDIAN = 0,
+    SKIP_LITTLE_ENDIAN = 1
+};
+
 enum SkipError {
     SKIP_SUCCESS = 0,
     SKIP_ERROR_INVALID_ARGUMENT = -1,
@@ -75,6 +80,10 @@ void* skip_import_cfg(const char* buffer, uint64_t buffer_size);
 uint64_t skip_get_export_buffer_size(void* cfg);
 
 int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size);
+
+int skip_get_system_endian();
+
+int skip_set_endian_value_cfg(void* cfg, int endian);
 
 #ifdef __cplusplus
 }
