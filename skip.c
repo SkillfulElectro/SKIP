@@ -3,6 +3,16 @@
 #include <string.h>
 #include "skip.h"
 
+#define SKIP_MAGIC 0x534B4950 // "SKIP" in ASCII
+
+typedef struct {
+    uint32_t magic;
+    uint32_t version;
+    uint64_t body_size;
+    uint8_t endian;
+    uint8_t reserved[15];
+} SkipHeader;
+
 
 static int is_little_endian() {
     volatile uint32_t i = 0x01234567;
@@ -156,6 +166,57 @@ int skip_push_type_to_config(void* cfg, int32_t type_code, uint64_t count) {
     return SKIP_SUCCESS;
 }
 
+uint64_t skip_get_header_export_size() {
+    return sizeof(SkipHeader);
+}
+
+int skip_export_header(void* cfg, char* buffer, uint64_t buffer_size, uint64_t* out_body_size) {
+    if (buffer_size < sizeof(SkipHeader)) {
+        return SKIP_ERROR_BUFFER_TOO_SMALL;
+    }
+
+    SkipConfig* config = (SkipConfig*)cfg;
+    uint64_t body_size = skip_get_export_body_size(config);
+
+    SkipHeader header;
+    header.magic = host_to_network_uint32(SKIP_MAGIC);
+    header.version = host_to_network_uint32(SKIP_CONFIG_VERSION);
+    header.body_size = host_to_network_uint64(body_size);
+    header.endian = config->endian;
+    memset(header.reserved, 0, sizeof(header.reserved));
+
+    memcpy(buffer, &header, sizeof(SkipHeader));
+    *out_body_size = body_size;
+
+    return SKIP_SUCCESS;
+}
+
+void* skip_import_header(const char* buffer, uint64_t buffer_size, uint64_t* out_body_size) {
+    if (buffer_size < sizeof(SkipHeader)) {
+        return NULL;
+    }
+
+    SkipHeader header;
+    memcpy(&header, buffer, sizeof(SkipHeader));
+    header.magic = network_to_host_uint32(header.magic);
+    header.version = network_to_host_uint32(header.version);
+    header.body_size = network_to_host_uint64(header.body_size);
+
+    if (header.magic != SKIP_MAGIC || header.version != SKIP_CONFIG_VERSION) {
+        return NULL;
+    }
+
+    void* config_ptr = skip_create_base_config();
+    if (!config_ptr) {
+        return NULL;
+    }
+
+    skip_set_endian_value_cfg(config_ptr, header.endian);
+    *out_body_size = header.body_size;
+
+    return config_ptr;
+}
+
 int skip_pop_type_from_config(void* cfg) {
     SkipConfig* config = (SkipConfig*)cfg;
     if (config->types_size > 0) {
@@ -256,62 +317,41 @@ int skip_write_index_to_buffer(void* cfg, void* buffer, uint64_t buffer_size, vo
     return SKIP_SUCCESS;
 }
 
-uint64_t skip_get_export_buffer_size(void* cfg) {
+uint64_t skip_get_export_body_size(void* cfg) {
     SkipConfig* config = (SkipConfig*)cfg;
-    return sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t) + (config->types_size * (sizeof(int32_t) + sizeof(uint64_t)));
+    return config->types_size * (sizeof(int32_t) + sizeof(uint64_t));
 }
 
-int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size) {
+int skip_export_cfg_body(void* cfg, char* buffer, uint64_t buffer_size) {
     SkipConfig* config = (SkipConfig*)cfg;
-    uint64_t required_size = skip_get_export_buffer_size(cfg);
-    if (buffer_size < required_size) return SKIP_ERROR_BUFFER_TOO_SMALL;
+    uint64_t required_size = skip_get_export_body_size(cfg);
+    if (buffer_size < required_size) {
+        return SKIP_ERROR_BUFFER_TOO_SMALL;
+    }
 
-    uint32_t version = host_to_network_uint32(SKIP_CONFIG_VERSION);
-    memcpy(buffer, &version, sizeof(uint32_t));
-
-    buffer[sizeof(uint32_t)] = (char)config->endian;
-
-    uint32_t num_types = host_to_network_uint32((uint32_t)config->types_size);
-    memcpy(buffer + sizeof(uint32_t) + sizeof(char), &num_types, sizeof(uint32_t));
-    
-    char* current_pos = buffer + sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t);
+    char* current_pos = buffer;
     for (uint64_t i = 0; i < config->types_size; ++i) {
         int32_t type_code = host_to_network_uint32(config->types[i].type_code);
         memcpy(current_pos, &type_code, sizeof(int32_t));
         current_pos += sizeof(int32_t);
-        
+
         uint64_t count = host_to_network_uint64(config->types[i].count);
         memcpy(current_pos, &count, sizeof(uint64_t));
         current_pos += sizeof(uint64_t);
     }
-    
+
     return SKIP_SUCCESS;
 }
 
-void* skip_import_cfg(const char* buffer, uint64_t buffer_size) {
-    if (buffer_size < sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t)) return NULL;
+int skip_import_cfg_body(void* cfg, const char* buffer, uint64_t buffer_size) {
+    if (!cfg) {
+        return SKIP_ERROR_INVALID_ARGUMENT;
+    }
 
-    uint32_t version_net;
-    memcpy(&version_net, buffer, sizeof(uint32_t));
-    uint32_t version = network_to_host_uint32(version_net);
-    if (version != SKIP_CONFIG_VERSION) return NULL;
+    const char* current_pos = buffer;
+    const char* end_pos = buffer + buffer_size;
 
-    int endian = (int)buffer[sizeof(uint32_t)];
-
-    uint32_t num_types_net;
-    memcpy(&num_types_net, buffer + sizeof(uint32_t) + sizeof(char), sizeof(uint32_t));
-    uint32_t num_types = network_to_host_uint32(num_types_net);
-
-    uint64_t expected_size = sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t) + num_types * (sizeof(int32_t) + sizeof(uint64_t));
-    if (buffer_size < expected_size) return NULL;
-
-    void* config_ptr = skip_create_base_config();
-    if (!config_ptr) return NULL;
-
-    skip_set_endian_value_cfg(config_ptr, endian);
-
-    const char* current_pos = buffer + sizeof(uint32_t) + sizeof(char) + sizeof(uint32_t);
-    for (uint32_t i = 0; i < num_types; ++i) {
+    while (current_pos < end_pos) {
         int32_t type_code_net;
         memcpy(&type_code_net, current_pos, sizeof(int32_t));
         int32_t type_code = network_to_host_uint32(type_code_net);
@@ -321,14 +361,13 @@ void* skip_import_cfg(const char* buffer, uint64_t buffer_size) {
         memcpy(&count_net, current_pos, sizeof(uint64_t));
         uint64_t count = network_to_host_uint64(count_net);
         current_pos += sizeof(uint64_t);
-        
-        if (skip_push_type_to_config(config_ptr, type_code, count) != SKIP_SUCCESS) {
-            skip_free_cfg(config_ptr);
-            return NULL;
+
+        if (skip_push_type_to_config(cfg, type_code, count) != SKIP_SUCCESS) {
+            return SKIP_ERROR_INVALID_CONFIG;
         }
     }
 
-    return config_ptr;
+    return SKIP_SUCCESS;
 }
 
 void* skip_get_index_ptr(void* cfg, void* buffer, uint64_t index) {
