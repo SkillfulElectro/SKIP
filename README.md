@@ -221,32 +221,60 @@ Retrieves a direct pointer to the start of the data for a given index within the
     - `index`: The index in the config that specifies which data segment to point to.
 - **Returns:** A `void*` pointer to the data segment, or `nullptr` if the index is out of bounds.
 
-#### `uint64_t skip_get_export_buffer_size(void* cfg)`
+#### `uint64_t skip_get_header_export_size()`
 
-Calculates the size of the buffer needed to export the configuration.
+Gets the fixed size of the configuration header.
 
-- **Parameters:**
-  - `cfg`: A pointer to the SKIP config.
-- **Returns:** The required buffer size in bytes.
+- **Returns:** The size of the header in bytes (currently 32 bytes).
 
-#### `int skip_export_cfg(void* cfg, char* buffer, uint64_t buffer_size)`
+#### `int skip_export_header(void* cfg, char* buffer, uint64_t buffer_size, uint64_t* out_body_size)`
 
-Exports the SKIP configuration to a buffer. This allows you to save the configuration and reuse it later, or send it over a network.
+Exports the configuration header to a buffer. This function serializes the metadata about the configuration, including a magic number for identification, the format version, the size of the configuration body, and the endianness.
 
 - **Parameters:**
   - `cfg`: A pointer to the SKIP config.
-  - `buffer`: The buffer to write the configuration to.
+  - `buffer`: The buffer to write the header to.
+  - `buffer_size`: The size of the buffer, which must be at least `skip_get_header_export_size()`.
+  - `out_body_size`: A pointer to a `uint64_t` where the size of the configuration body will be stored.
+- **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
+
+#### `void* skip_import_header(const char* buffer, uint64_t buffer_size, uint64_t* out_body_size)`
+
+Imports a configuration header from a buffer and creates a new SKIP config object. It reads the metadata, validates the magic number and version, and prepares a config object with the correct endianness.
+
+- **Parameters:**
+  - `buffer`: The buffer to read the header from.
+  - `buffer_size`: The size of the buffer.
+  - `out_body_size`: A pointer to a `uint64_t` where the size of the configuration body (as read from the header) will be stored. This tells you how large the buffer for the body needs to be.
+- **Returns:** A pointer to a new SKIP config, or `nullptr` on failure (e.g., invalid magic number, version mismatch).
+
+#### `uint64_t skip_get_export_body_size(void* cfg)`
+
+Calculates the size of the buffer needed to export the configuration body (the actual type information).
+
+- **Parameters:**
+  - `cfg`: A pointer to the SKIP config.
+- **Returns:** The required buffer size for the body in bytes.
+
+#### `int skip_export_cfg_body(void* cfg, char* buffer, uint64_t buffer_size)`
+
+Exports the SKIP configuration body to a buffer. This function should be called after `skip_export_header`.
+
+- **Parameters:**
+  - `cfg`: A pointer to the SKIP config.
+  - `buffer`: The buffer to write the configuration body to.
   - `buffer_size`: The size of the buffer.
 - **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
 
-#### `void* skip_import_cfg(const char* buffer, uint64_t buffer_size)`
+#### `int skip_import_cfg_body(void* cfg, const char* buffer, uint64_t buffer_size)`
 
-Imports a SKIP configuration from a buffer.
+Imports a SKIP configuration body into a pre-existing config object. This function should be called after `skip_import_header`.
 
 - **Parameters:**
-  - `buffer`: The buffer to read the configuration from.
+  - `cfg`: A pointer to the config object created by `skip_import_header`.
+  - `buffer`: The buffer to read the configuration body from.
   - `buffer_size`: The size of the buffer.
-- **Returns:** A pointer to a new SKIP config, or `nullptr` on failure.
+- **Returns:** `SKIP_SUCCESS` on success, or `SKIP_ERROR_INVALID_CONFIG` on failure.
 
 #### `int skip_get_system_endian()`
 
