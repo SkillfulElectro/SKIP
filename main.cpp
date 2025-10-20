@@ -139,32 +139,46 @@ void test_get_index_ptr() {
 void test_import_export() {
     std::cout << "--- Testing Import/Export ---" << std::endl;
 
+    // 1. Create and configure the original config object
     void* config = skip_create_base_config();
     skip_push_type_to_config(config, skip_int32, 1);
     skip_push_type_to_config(config, skip_float64, 2);
     skip_push_type_to_config(config, skip_char, 10);
 
-    uint64_t buffer_size = skip_get_export_buffer_size(config);
-    char* exported_buffer = new char[buffer_size];
-    int export_result = skip_export_cfg(config, exported_buffer, buffer_size);
-    assert(export_result == SKIP_SUCCESS);
+    // 2. Export the header
+    uint64_t header_size = skip_get_header_export_size();
+    char* header_buffer = new char[header_size];
+    uint64_t exported_body_size;
+    assert(skip_export_header(config, header_buffer, header_size, &exported_body_size) == SKIP_SUCCESS);
 
-    void* imported_config = skip_import_cfg(exported_buffer, buffer_size);
+    // 3. Export the body
+    uint64_t body_size = skip_get_export_body_size(config);
+    char* body_buffer = new char[body_size];
+    assert(skip_export_cfg_body(config, body_buffer, body_size) == SKIP_SUCCESS);
+    assert(exported_body_size == body_size);
 
+    // 4. Import the header
+    uint64_t imported_body_size;
+    void* imported_config = skip_import_header(header_buffer, header_size, &imported_body_size);
     assert(imported_config != NULL);
-    assert(skip_get_cfg_size(config) == skip_get_cfg_size(imported_config));
+    assert(body_size == imported_body_size);
 
+    // 5. Import the body
+    assert(skip_import_cfg_body(imported_config, body_buffer, body_size) == SKIP_SUCCESS);
+
+    // 6. Verify the imported config
+    assert(skip_get_cfg_size(config) == skip_get_cfg_size(imported_config));
     SkipInternalType* original_type = skip_get_type_at_index(config, 1);
     SkipInternalType* imported_type = skip_get_type_at_index(imported_config, 1);
-
     assert(original_type->type_code == imported_type->type_code);
     assert(original_type->count == imported_type->count);
-
     std::cout << "Config sizes and types match." << std::endl;
 
+    // 7. Cleanup
     skip_free_cfg(config);
     skip_free_cfg(imported_config);
-    delete[] exported_buffer;
+    delete[] header_buffer;
+    delete[] body_buffer;
 
     std::cout << "--- Test Passed ---" << std::endl << std::endl;
 }
@@ -223,22 +237,29 @@ void test_error_handling() {
     assert(skip_read_index_from_buffer(config, buffer, buffer_size, &value, 1) == SKIP_ERROR_OUT_OF_BOUNDS);
     std::cout << "Out of bounds access test passed." << std::endl;
 
-    // Test exporting to a buffer that is too small
-    uint64_t export_buffer_size = skip_get_export_buffer_size(config);
-    char* export_buffer = new char[export_buffer_size];
-    assert(skip_export_cfg(config, export_buffer, export_buffer_size - 1) == SKIP_ERROR_BUFFER_TOO_SMALL);
-    std::cout << "Export buffer too small test passed." << std::endl;
+    // Test exporting header to a buffer that is too small
+    uint64_t header_size = skip_get_header_export_size();
+    char* header_buffer = new char[header_size];
+    uint64_t body_size;
+    assert(skip_export_header(config, header_buffer, header_size - 1, &body_size) == SKIP_ERROR_BUFFER_TOO_SMALL);
+    std::cout << "Export header buffer too small test passed." << std::endl;
 
-    // Test importing from a buffer that is too small
-    assert(skip_import_cfg(export_buffer, sizeof(uint32_t) - 1) == NULL);
-    skip_export_cfg(config, export_buffer, export_buffer_size);
-    assert(skip_import_cfg(export_buffer, export_buffer_size - 1) == NULL);
-    std::cout << "Import buffer too small test passed." << std::endl;
+    // Test exporting body to a buffer that is too small
+    body_size = skip_get_export_body_size(config);
+    char* body_buffer = new char[body_size];
+    assert(skip_export_cfg_body(config, body_buffer, body_size - 1) == SKIP_ERROR_BUFFER_TOO_SMALL);
+    std::cout << "Export body buffer too small test passed." << std::endl;
+
+    // Test importing header from a buffer that is too small
+    uint64_t imported_body_size;
+    assert(skip_import_header(header_buffer, header_size - 1, &imported_body_size) == NULL);
+    std::cout << "Import header buffer too small test passed." << std::endl;
 
 
     skip_free_cfg(config);
     delete[] buffer;
-    delete[] export_buffer;
+    delete[] header_buffer;
+    delete[] body_buffer;
     std::cout << "--- Test Passed ---" << std::endl << std::endl;
 }
 
@@ -270,11 +291,19 @@ void test_endianness_config() {
     std::cout << "Big-endian read is correct." << std::endl;
 
     // Test import/export preserves endianness
-    uint64_t export_buffer_size = skip_get_export_buffer_size(config);
-    char* export_buffer = new char[export_buffer_size];
-    assert(skip_export_cfg(config, export_buffer, export_buffer_size) == SKIP_SUCCESS);
-    void* imported_config = skip_import_cfg(export_buffer, export_buffer_size);
+    uint64_t header_size = skip_get_header_export_size();
+    char* header_buffer = new char[header_size];
+    uint64_t exported_body_size;
+    assert(skip_export_header(config, header_buffer, header_size, &exported_body_size) == SKIP_SUCCESS);
+
+    uint64_t body_size = skip_get_export_body_size(config);
+    char* body_buffer = new char[body_size];
+    assert(skip_export_cfg_body(config, body_buffer, body_size) == SKIP_SUCCESS);
+
+    uint64_t imported_body_size;
+    void* imported_config = skip_import_header(header_buffer, header_size, &imported_body_size);
     assert(imported_config != NULL);
+    assert(skip_import_cfg_body(imported_config, body_buffer, body_size) == SKIP_SUCCESS);
 
     // Use the imported config to write a value and check if the byte order is correct.
     // This behaviorally verifies that the endianness setting was imported correctly.
@@ -291,9 +320,9 @@ void test_endianness_config() {
     std::cout << "Import/export correctly preserves endianness setting." << std::endl;
     delete[] verification_buffer;
 
-
     delete[] buffer;
-    delete[] export_buffer;
+    delete[] header_buffer;
+    delete[] body_buffer;
     skip_free_cfg(config);
     skip_free_cfg(imported_config);
     std::cout << "--- Test Passed ---" << std::endl << std::endl;
