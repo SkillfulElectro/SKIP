@@ -1,7 +1,4 @@
-#include <cstdint>
-#include <stddef.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
 #include "skip.h"
 
@@ -443,13 +440,13 @@ int skip_read_index_from_buffer(void* cfg, void* buffer, uint64_t buffer_size, v
 
 
 int skip_create_nest_buffer(void* final_res , uint64_t final_res_size , void* meta_buffer , uint64_t meta_size , void* data_buffer , uint64_t data_size) {
-    if (final_res_size < meta_size + data_size) {
+    if (final_res_size < meta_size + data_size + sizeof(uint64_t)) {
         return (int)SKIP_ERROR_BUFFER_TOO_SMALL;
     }
 
     memcpy(final_res , &meta_size , sizeof(uint64_t));
     memcpy((uint8_t*)final_res + sizeof(uint64_t), meta_buffer , meta_size);
-    memcpy((uint8_t*)final_res + meta_size, data_buffer , data_size);
+    memcpy((uint8_t*)final_res + sizeof(uint64_t) + meta_size, data_buffer , data_size);
 
     return (int)SKIP_SUCCESS;
 }
@@ -481,11 +478,17 @@ int skip_get_nested_data_buffer(void* nested_cfg_buffer , void* nest_buffer , ui
     uint64_t meta_size;
     memcpy(&meta_size, nest_buffer, sizeof(uint64_t));
 
-    if (nest_size - meta_size - sizeof(uint64_t) > data_size) {
+    if (nest_size < meta_size + sizeof(uint64_t)) {
         return SKIP_ERROR_BUFFER_TOO_SMALL;
     }
 
-    memcpy(data_buffer, (uint8_t*)nest_buffer + meta_size + sizeof(uint64_t), nest_size - meta_size - sizeof(uint64_t));
+    uint64_t actual_data_size = nest_size - meta_size - sizeof(uint64_t);
+
+    if (actual_data_size > data_size) {
+        return SKIP_ERROR_BUFFER_TOO_SMALL;
+    }
+
+    memcpy(data_buffer, (uint8_t*)nest_buffer + meta_size + sizeof(uint64_t), actual_data_size);
 
     return SKIP_SUCCESS;
 }
