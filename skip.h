@@ -1,7 +1,6 @@
 #ifndef SKIP_H
 #define SKIP_H
 
-#include <cstdint>
 #include <stddef.h>
 #include <stdint.h>
 

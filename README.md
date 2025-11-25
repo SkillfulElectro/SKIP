@@ -39,7 +39,17 @@ To build the SKIP library and the example `main` executable, you will need to ha
     make
     ```
 
-This will create a `libskip.so` shared library and a `main` executable in the `build` directory.
+This will create a `libskip.so` shared library, a `tests` executable, and a `benchmark` executable in the `build` directory.
+
+To run the tests, execute the following command from the `build` directory:
+```bash
+./tests
+```
+
+To run the benchmark, execute the following command from the `build` directory:
+```bash
+./benchmark
+```
 
 ## API Reference
 
@@ -355,6 +365,18 @@ Message (from ptr): Hello SKIP!
 Year (from ptr): 2024
 PI (from copy): 3.14159
 ```
+
+## Benchmarking
+
+A benchmark was performed to compare the performance of SKIP against JSON and XML. The test involved serializing and deserializing a dataset containing 1000 integers, 1000 doubles, and 1000 strings.
+
+| Format | Output Size (bytes) | Encoding Time (ms) | Decoding Time (ms) |
+|--------|---------------------|--------------------|--------------------|
+| SKIP   | 22890               | 0.094              | 0.200              |
+| JSON   | 29358               | 1.466              | 6.778              |
+| XML    | 76591               | 3.067              | 1.703              |
+
+As the results show, SKIP is significantly faster and more lightweight than both JSON and XML.
 
 ## Contribution
 - all contributions are welcomed :)
