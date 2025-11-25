@@ -15,7 +15,7 @@ void test_new_datatypes() {
     skip_push_type_to_config(config, skip_float32, 1);
     skip_push_type_to_config(config, skip_int64, 1);
 
-    uint64_t buffer_size = skip_get_cfg_size(config);
+    uint64_t buffer_size = skip_get_data_size(config);
     std::cout << "Buffer size: " << buffer_size << std::endl;
     assert(buffer_size == 1 + 2 + 4 + 8);
 
@@ -63,7 +63,7 @@ void test_char_type() {
     void* config = skip_create_base_config();
     skip_push_type_to_config(config, skip_char, 1);
 
-    uint64_t buffer_size = skip_get_cfg_size(config);
+    uint64_t buffer_size = skip_get_data_size(config);
     assert(buffer_size == 1);
 
     char* buffer = new char[buffer_size];
@@ -91,7 +91,7 @@ void test_get_index_ptr() {
     skip_push_type_to_config(config, skip_uint8, 13); // "Hello World"
     skip_push_type_to_config(config, skip_int32, 1);
 
-    uint64_t buffer_size = skip_get_cfg_size(config);
+    uint64_t buffer_size = skip_get_data_size(config);
      std::cout << "Buffer size: " << buffer_size << std::endl;
     assert(buffer_size == 13 + 4);
 
@@ -154,7 +154,7 @@ void test_import_export() {
     // 3. Export the body
     uint64_t body_size = skip_get_export_body_size(config);
     char* body_buffer = new char[body_size];
-    assert(skip_export_cfg_body(config, body_buffer, body_size) == SKIP_SUCCESS);
+    assert(skip_export_header_body(config, body_buffer, body_size) == SKIP_SUCCESS);
     assert(exported_body_size == body_size);
 
     // 4. Import the header
@@ -164,10 +164,10 @@ void test_import_export() {
     assert(body_size == imported_body_size);
 
     // 5. Import the body
-    assert(skip_import_cfg_body(imported_config, body_buffer, body_size) == SKIP_SUCCESS);
+    assert(skip_import_header_body(imported_config, body_buffer, body_size) == SKIP_SUCCESS);
 
     // 6. Verify the imported config
-    assert(skip_get_cfg_size(config) == skip_get_cfg_size(imported_config));
+    assert(skip_get_data_size(config) == skip_get_data_size(imported_config));
     SkipInternalType* original_type = skip_get_type_at_index(config, 1);
     SkipInternalType* imported_type = skip_get_type_at_index(imported_config, 1);
     assert(original_type->type_code == imported_type->type_code);
@@ -190,7 +190,7 @@ void test_endianness() {
     void* config = skip_create_base_config();
     skip_push_type_to_config(config, skip_uint32, 1);
 
-    uint64_t buffer_size = skip_get_cfg_size(config);
+    uint64_t buffer_size = skip_get_data_size(config);
     char* buffer = new char[buffer_size];
 
     uint32_t original_value = 0x12345678;
@@ -220,7 +220,7 @@ void test_error_handling() {
     void* config = skip_create_base_config();
     skip_push_type_to_config(config, skip_int32, 1);
 
-    uint64_t buffer_size = skip_get_cfg_size(config);
+    uint64_t buffer_size = skip_get_data_size(config);
     char* buffer = new char[buffer_size];
 
     // Test writing to a buffer that is too small
@@ -247,7 +247,7 @@ void test_error_handling() {
     // Test exporting body to a buffer that is too small
     body_size = skip_get_export_body_size(config);
     char* body_buffer = new char[body_size];
-    assert(skip_export_cfg_body(config, body_buffer, body_size - 1) == SKIP_ERROR_BUFFER_TOO_SMALL);
+    assert(skip_export_header_body(config, body_buffer, body_size - 1) == SKIP_ERROR_BUFFER_TOO_SMALL);
     std::cout << "Export body buffer too small test passed." << std::endl;
 
     // Test importing header from a buffer that is too small
@@ -271,7 +271,7 @@ void test_endianness_config() {
 
     // Test setting to big-endian
     skip_set_endian_value_cfg(config, SKIP_BIG_ENDIAN);
-    uint64_t buffer_size = skip_get_cfg_size(config);
+    uint64_t buffer_size = skip_get_data_size(config);
     char* buffer = new char[buffer_size];
     uint32_t original_value = 0x12345678;
 
@@ -298,12 +298,12 @@ void test_endianness_config() {
 
     uint64_t body_size = skip_get_export_body_size(config);
     char* body_buffer = new char[body_size];
-    assert(skip_export_cfg_body(config, body_buffer, body_size) == SKIP_SUCCESS);
+    assert(skip_export_header_body(config, body_buffer, body_size) == SKIP_SUCCESS);
 
     uint64_t imported_body_size;
     void* imported_config = skip_import_header(header_buffer, header_size, &imported_body_size);
     assert(imported_config != NULL);
-    assert(skip_import_cfg_body(imported_config, body_buffer, body_size) == SKIP_SUCCESS);
+    assert(skip_import_header_body(imported_config, body_buffer, body_size) == SKIP_SUCCESS);
 
     // Use the imported config to write a value and check if the byte order is correct.
     // This behaviorally verifies that the endianness setting was imported correctly.
