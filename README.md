@@ -18,6 +18,18 @@ The core of SKIP is the concept of a "config", which is a description of the dat
 - **Versioning:** The exported configuration format includes a version number and endianness information, ensuring backward compatibility.
 - **Configurable Endianness:** By default, SKIP uses the system's native endianness for serialization, but you can explicitly set it to either big-endian or little-endian, ensuring consistent data representation across different systems.
 
+## Benchmarking
+
+A benchmark was performed to compare the performance of SKIP against JSON and XML. The test involved serializing and deserializing a dataset containing 1000 integers, 1000 doubles, and 1000 strings.
+
+| Format | Output Size (bytes) | Encoding Time (ms) | Decoding Time (ms) |
+|--------|---------------------|--------------------|--------------------|
+| SKIP   | 22890               | 0.094              | 0.200              |
+| JSON   | 29358               | 1.466              | 6.778              |
+| XML    | 76591               | 3.067              | 1.703              |
+
+As the results show, SKIP is significantly faster and more lightweight than both JSON and XML.
+
 ## Building
 
 To build the SKIP library and the example `main` executable, you will need to have `cmake` and `make` installed.
@@ -39,7 +51,17 @@ To build the SKIP library and the example `main` executable, you will need to ha
     make
     ```
 
-This will create a `libskip.so` shared library and a `main` executable in the `build` directory.
+This will create a `libskip.so` shared library, a `tests` executable, and a `benchmark` executable in the `build` directory.
+
+To run the tests, execute the following command from the `build` directory:
+```bash
+./tests
+```
+
+To run the benchmark, execute the following command from the `build` directory:
+```bash
+./benchmark
+```
 
 ## API Reference
 
@@ -169,7 +191,7 @@ Frees the memory used by a SKIP configuration.
     - `cfg`: A pointer to the SKIP config.
 - **Returns:** `0` on success.
 
-#### `uint64_t skip_get_cfg_size(void* cfg)`
+#### `uint64_t skip_get_data_size(void* cfg)`
 
 Calculates the total size in bytes required for a buffer based on the current configuration.
 
@@ -256,7 +278,7 @@ Calculates the size of the buffer needed to export the configuration body (the a
   - `cfg`: A pointer to the SKIP config.
 - **Returns:** The required buffer size for the body in bytes.
 
-#### `int skip_export_cfg_body(void* cfg, char* buffer, uint64_t buffer_size)`
+#### `int skip_export_header_body(void* cfg, char* buffer, uint64_t buffer_size)`
 
 Exports the SKIP configuration body to a buffer. This function should be called after `skip_export_header`.
 
@@ -266,7 +288,7 @@ Exports the SKIP configuration body to a buffer. This function should be called 
   - `buffer_size`: The size of the buffer.
 - **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
 
-#### `int skip_import_cfg_body(void* cfg, const char* buffer, uint64_t buffer_size)`
+#### `int skip_import_header_body(void* cfg, const char* buffer, uint64_t buffer_size)`
 
 Imports a SKIP configuration body into a pre-existing config object. This function should be called after `skip_import_header`.
 
@@ -291,6 +313,96 @@ Sets the desired endianness for the SKIP configuration. This will affect how mul
   - `endian`: The desired endianness, either `SKIP_BIG_ENDIAN` or `SKIP_LITTLE_ENDIAN`.
 - **Returns:** `SKIP_SUCCESS` on success.
 
+#### `int skip_get_cfg_endian(void* cfg)`
+
+Gets the endianness of the SKIP configuration.
+
+- **Parameters:**
+    - `cfg`: A pointer to the SKIP config.
+- **Returns:** `SKIP_BIG_ENDIAN` or `SKIP_LITTLE_ENDIAN`.
+
+### Nesting Functions
+
+#### `int skip_create_nest_buffer(void* final_res, uint64_t final_res_size, void* meta_buffer, uint64_t meta_size, void* data_buffer, uint64_t data_size)`
+
+Creates a nested buffer by combining a metadata buffer and a data buffer.
+
+- **Parameters:**
+  - `final_res`: A pointer to the destination buffer.
+  - `final_res_size`: The size of the destination buffer.
+  - `meta_buffer`: A pointer to the metadata buffer.
+  - `meta_size`: The size of the metadata buffer.
+  - `data_buffer`: A pointer to the data buffer.
+  - `data_size`: The size of the data buffer.
+- **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
+
+#### `int skip_get_nest_cfg(void* cfg, void* nest_base_cfg, void* nest_buffer, uint64_t nest_size)`
+
+Extracts the configuration from a nested buffer.
+
+- **Parameters:**
+  - `cfg`: A pointer to the parent SKIP config.
+  - `nest_base_cfg`: A pointer to the destination config for the nested data.
+  - `nest_buffer`: A pointer to the nested buffer.
+  - `nest_size`: The size of the nested buffer.
+- **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
+
+#### `int skip_get_nested_data_buffer(void* nested_cfg_buffer, void* nest_buffer, uint64_t nest_size, void* data_buffer, uint64_t data_size)`
+
+Extracts the data buffer from a nested buffer.
+
+- **Parameters:**
+  - `nested_cfg_buffer`: A pointer to the configuration of the nested buffer.
+  - `nest_buffer`: A pointer to the nested buffer.
+  - `nest_size`: The size of the nested buffer.
+  - `data_buffer`: A pointer to the destination buffer for the data.
+  - `data_size`: The size of the destination data buffer.
+- **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
+
+### Standalone Functions
+
+#### `uint64_t skip_export_standalone_size(void* cfg)`
+
+Calculates the total size required to export a standalone buffer (header + body + data).
+
+- **Parameters:**
+  - `cfg`: A pointer to the SKIP config.
+- **Returns:** The required size in bytes.
+
+#### `int skip_export_standalone(void* cfg, void* data_buffer, uint64_t data_size, void* standalone_buffer, uint64_t standalone_size)`
+
+Exports a standalone buffer containing the header, body, and data.
+
+- **Parameters:**
+  - `cfg`: A pointer to the SKIP config.
+  - `data_buffer`: A pointer to the data buffer.
+  - `data_size`: The size of the data buffer.
+  - `standalone_buffer`: A pointer to the destination buffer.
+  - `standalone_size`: The size of the destination buffer.
+- **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
+
+#### `int skip_fill_import_standalone_cfg(void* void_null_ptr, void* buffer, uint64_t buffer_size)`
+
+Imports the configuration from a standalone buffer.
+
+- **Parameters:**
+  - `void_null_ptr`: A null pointer that will be populated with the new config.
+  - `buffer`: A pointer to the standalone buffer.
+  - `buffer_size`: The size of the standalone buffer.
+- **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
+
+#### `int skip_fill_data_buffer_import_standalone(void* cfg, void* buffer, uint64_t buffer_size, void* data_buffer, uint64_t data_buffer_size)`
+
+Imports the data from a standalone buffer.
+
+- **Parameters:**
+  - `cfg`: A pointer to the SKIP config.
+  - `buffer`: A pointer to the standalone buffer.
+  - `buffer_size`: The size of the standalone buffer.
+  - `data_buffer`: A pointer to the destination data buffer.
+  - `data_buffer_size`: The size of the destination data buffer.
+- **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
+
 ## Usage Example
 
 Here is a simple example of how to use the SKIP library to serialize and deserialize a struct-like object with multiple data types.
@@ -313,7 +425,7 @@ int main() {
     skip_push_type_to_config(config, skip_float64, 1);
 
     // 3. Allocate a buffer to hold the serialized data.
-    size_t buffer_size = skip_get_cfg_size(config);
+    size_t buffer_size = skip_get_data_size(config);
     char* buffer = new char[buffer_size];
 
     // 4. Prepare the data to be serialized.
