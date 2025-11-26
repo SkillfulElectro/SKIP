@@ -33,38 +33,6 @@ static uint64_t swap_uint64(uint64_t val) {
     return (val << 32) | (val >> 32);
 }
 
-static uint64_t host_to_network_uint64(uint64_t host_long_long) {
-    if (is_little_endian()) {
-        return swap_uint64(host_long_long);
-    }
-    return host_long_long;
-}
-
-static uint32_t host_to_network_uint32(uint32_t host_long) {
-    if (is_little_endian()) {
-        return swap_uint32(host_long);
-    }
-    return host_long;
-}
-
-static uint16_t host_to_network_uint16(uint16_t host_short) {
-    if (is_little_endian()) {
-        return swap_uint16(host_short);
-    }
-    return host_short;
-}
-
-static uint64_t network_to_host_uint64(uint64_t network_long_long) {
-    return host_to_network_uint64(network_long_long);
-}
-
-static uint32_t network_to_host_uint32(uint32_t network_long) {
-    return host_to_network_uint32(network_long);
-}
-
-static uint16_t network_to_host_uint16(uint16_t network_short) {
-    return host_to_network_uint16(network_short);
-}
 
 
 typedef struct {
@@ -184,11 +152,17 @@ int skip_export_header(void* cfg, char* buffer, uint64_t buffer_size, uint64_t* 
     uint64_t body_size = skip_get_export_body_size(config);
 
     SkipHeader header;
-    header.magic = host_to_network_uint32(SKIP_MAGIC);
-    header.version = host_to_network_uint32(SKIP_CONFIG_VERSION);
-    header.body_size = host_to_network_uint64(body_size);
+    header.magic = SKIP_MAGIC;
+    header.version = SKIP_CONFIG_VERSION;
+    header.body_size = body_size;
     header.endian = config->endian;
     memset(header.reserved, 0, sizeof(header.reserved));
+
+    if (skip_get_system_endian() != config->endian) {
+        header.magic = swap_uint32(header.magic);
+        header.version = swap_uint32(header.version);
+        header.body_size = swap_uint64(header.body_size);
+    }
 
     memcpy(buffer, &header, sizeof(SkipHeader));
     *out_body_size = body_size;
@@ -203,9 +177,12 @@ void* skip_import_header(const char* buffer, uint64_t buffer_size, uint64_t* out
 
     SkipHeader header;
     memcpy(&header, buffer, sizeof(SkipHeader));
-    header.magic = network_to_host_uint32(header.magic);
-    header.version = network_to_host_uint32(header.version);
-    header.body_size = network_to_host_uint64(header.body_size);
+
+    if (skip_get_system_endian() != header.endian) {
+        header.magic = swap_uint32(header.magic);
+        header.version = swap_uint32(header.version);
+        header.body_size = swap_uint64(header.body_size);
+    }
 
     if (header.magic != SKIP_MAGIC || header.version != SKIP_CONFIG_VERSION) {
         return NULL;
@@ -278,7 +255,6 @@ int skip_write_index_to_buffer(void* cfg, void* buffer, uint64_t buffer_size, vo
     uint64_t offset = config->offsets[index];
     uint64_t type_size = skip_get_datatype_size(config->types[index].type_code);
     uint64_t count = config->types[index].count;
-    int32_t type_code = config->types[index].type_code;
 
     if (offset + (type_size * count) > buffer_size) {
         return SKIP_ERROR_BUFFER_TOO_SMALL;
@@ -289,35 +265,30 @@ int skip_write_index_to_buffer(void* cfg, void* buffer, uint64_t buffer_size, vo
 
     if (type_size == 1 || system_endian == config_endian) {
         memcpy((uint8_t*)buffer + offset, value, (size_t)(count * type_size));
-        return SKIP_SUCCESS;
-    }
-
-    uint8_t* current_val_ptr = (uint8_t*)value;
-    for (uint64_t i = 0; i < count; ++i) {
-        uint64_t current_offset = offset + (i * type_size);
-        switch (type_code) {
-            case skip_int16:
-            case skip_uint16: {
-                uint16_t val = host_to_network_uint16(*(uint16_t*)current_val_ptr);
-                memcpy((uint8_t*)buffer + current_offset, &val, sizeof(uint16_t));
-                break;
+    } else {
+        uint8_t* dst_ptr = (uint8_t*)buffer + offset;
+        uint8_t* src_ptr = (uint8_t*)value;
+        for (uint64_t i = 0; i < count; ++i) {
+            switch (type_size) {
+                case 2: {
+                    uint16_t val = swap_uint16(*(uint16_t*)src_ptr);
+                    memcpy(dst_ptr, &val, 2);
+                    break;
+                }
+                case 4: {
+                    uint32_t val = swap_uint32(*(uint32_t*)src_ptr);
+                    memcpy(dst_ptr, &val, 4);
+                    break;
+                }
+                case 8: {
+                    uint64_t val = swap_uint64(*(uint64_t*)src_ptr);
+                    memcpy(dst_ptr, &val, 8);
+                    break;
+                }
             }
-            case skip_int32:
-            case skip_uint32:
-            case skip_float32: {
-                uint32_t val = host_to_network_uint32(*(uint32_t*)current_val_ptr);
-                memcpy((uint8_t*)buffer + current_offset, &val, sizeof(uint32_t));
-                break;
-            }
-            case skip_int64:
-            case skip_uint64:
-            case skip_float64: {
-                uint64_t val = host_to_network_uint64(*(uint64_t*)current_val_ptr);
-                memcpy((uint8_t*)buffer + current_offset, &val, sizeof(uint64_t));
-                break;
-            }
+            src_ptr += type_size;
+            dst_ptr += type_size;
         }
-        current_val_ptr += type_size;
     }
 
     return SKIP_SUCCESS;
@@ -337,11 +308,16 @@ int skip_export_header_body(void* cfg, char* buffer, uint64_t buffer_size) {
 
     char* current_pos = buffer;
     for (uint64_t i = 0; i < config->types_size; ++i) {
-        int32_t type_code = host_to_network_uint32(config->types[i].type_code);
+        int32_t type_code = config->types[i].type_code;
+        uint64_t count = config->types[i].count;
+
+        if (skip_get_system_endian() != config->endian) {
+            type_code = swap_uint32(type_code);
+            count = swap_uint64(count);
+        }
+
         memcpy(current_pos, &type_code, sizeof(int32_t));
         current_pos += sizeof(int32_t);
-
-        uint64_t count = host_to_network_uint64(config->types[i].count);
         memcpy(current_pos, &count, sizeof(uint64_t));
         current_pos += sizeof(uint64_t);
     }
@@ -350,23 +326,29 @@ int skip_export_header_body(void* cfg, char* buffer, uint64_t buffer_size) {
 }
 
 int skip_import_header_body(void* cfg, const char* buffer, uint64_t buffer_size) {
-    if (!cfg) {
+    SkipConfig* config = (SkipConfig*)cfg;
+    if (!config) {
         return SKIP_ERROR_INVALID_ARGUMENT;
     }
 
     const char* current_pos = buffer;
     const char* end_pos = buffer + buffer_size;
+    int system_endian = skip_get_system_endian();
+    int config_endian = config->endian;
 
     while (current_pos < end_pos) {
-        int32_t type_code_net;
-        memcpy(&type_code_net, current_pos, sizeof(int32_t));
-        int32_t type_code = network_to_host_uint32(type_code_net);
-        current_pos += sizeof(int32_t);
+        int32_t type_code;
+        uint64_t count;
 
-        uint64_t count_net;
-        memcpy(&count_net, current_pos, sizeof(uint64_t));
-        uint64_t count = network_to_host_uint64(count_net);
+        memcpy(&type_code, current_pos, sizeof(int32_t));
+        current_pos += sizeof(int32_t);
+        memcpy(&count, current_pos, sizeof(uint64_t));
         current_pos += sizeof(uint64_t);
+
+        if (system_endian != config_endian) {
+            type_code = swap_uint32(type_code);
+            count = swap_uint64(count);
+        }
 
         if (skip_push_type_to_config(cfg, type_code, count) != SKIP_SUCCESS) {
             return SKIP_ERROR_INVALID_CONFIG;
@@ -390,7 +372,6 @@ int skip_read_index_from_buffer(void* cfg, void* buffer, uint64_t buffer_size, v
     uint64_t offset = config->offsets[index];
     uint64_t type_size = skip_get_datatype_size(config->types[index].type_code);
     uint64_t count = config->types[index].count;
-    int32_t type_code = config->types[index].type_code;
 
     if (offset + (type_size * count) > buffer_size) {
         return SKIP_ERROR_BUFFER_TOO_SMALL;
@@ -401,82 +382,94 @@ int skip_read_index_from_buffer(void* cfg, void* buffer, uint64_t buffer_size, v
 
     if (type_size == 1 || system_endian == config_endian) {
         memcpy(value, (uint8_t*)buffer + offset, (size_t)(count * type_size));
-        return SKIP_SUCCESS;
-    }
-    
-    uint8_t* current_val_ptr = (uint8_t*)value;
-    for (uint64_t i = 0; i < count; ++i) {
-        uint64_t current_offset = offset + (i * type_size);
-        switch (type_code) {
-            case skip_int16:
-            case skip_uint16: {
-                uint16_t net_val;
-                memcpy(&net_val, (uint8_t*)buffer + current_offset, sizeof(uint16_t));
-                *(uint16_t*)current_val_ptr = network_to_host_uint16(net_val);
-                break;
+    } else {
+        uint8_t* dst_ptr = (uint8_t*)value;
+        uint8_t* src_ptr = (uint8_t*)buffer + offset;
+        for (uint64_t i = 0; i < count; ++i) {
+            switch (type_size) {
+                case 2: {
+                    uint16_t val;
+                    memcpy(&val, src_ptr, 2);
+                    *(uint16_t*)dst_ptr = swap_uint16(val);
+                    break;
+                }
+                case 4: {
+                    uint32_t val;
+                    memcpy(&val, src_ptr, 4);
+                    *(uint32_t*)dst_ptr = swap_uint32(val);
+                    break;
+                }
+                case 8: {
+                    uint64_t val;
+                    memcpy(&val, src_ptr, 8);
+                    *(uint64_t*)dst_ptr = swap_uint64(val);
+                    break;
+                }
             }
-            case skip_int32:
-            case skip_uint32:
-            case skip_float32: {
-                uint32_t net_val;
-                memcpy(&net_val, (uint8_t*)buffer + current_offset, sizeof(uint32_t));
-                *(uint32_t*)current_val_ptr = network_to_host_uint32(net_val);
-                break;
-            }
-            case skip_int64:
-            case skip_uint64:
-            case skip_float64: {
-                uint64_t net_val;
-                memcpy(&net_val, (uint8_t*)buffer + current_offset, sizeof(uint64_t));
-                *(uint64_t*)current_val_ptr = network_to_host_uint64(net_val);
-                break;
-            }
+            src_ptr += type_size;
+            dst_ptr += type_size;
         }
-        current_val_ptr += type_size;
     }
 
     return SKIP_SUCCESS;
 }
 
 
-int skip_create_nest_buffer(void* final_res , uint64_t final_res_size , void* meta_buffer , uint64_t meta_size , void* data_buffer , uint64_t data_size) {
+int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size, void* meta_buffer, uint64_t meta_size, void* data_buffer, uint64_t data_size) {
     if (final_res_size < meta_size + data_size + sizeof(uint64_t)) {
         return (int)SKIP_ERROR_BUFFER_TOO_SMALL;
     }
 
-    memcpy(final_res , &meta_size , sizeof(uint64_t));
-    memcpy((uint8_t*)final_res + sizeof(uint64_t), meta_buffer , meta_size);
-    memcpy((uint8_t*)final_res + sizeof(uint64_t) + meta_size, data_buffer , data_size);
+    SkipConfig* config = (SkipConfig*)cfg;
+    uint64_t meta_size_to_write = meta_size;
+
+    if (skip_get_system_endian() != config->endian) {
+        meta_size_to_write = swap_uint64(meta_size_to_write);
+    }
+
+    memcpy(final_res, &meta_size_to_write, sizeof(uint64_t));
+    memcpy((uint8_t*)final_res + sizeof(uint64_t), meta_buffer, meta_size);
+    memcpy((uint8_t*)final_res + sizeof(uint64_t) + meta_size, data_buffer, data_size);
 
     return (int)SKIP_SUCCESS;
 }
 
-int skip_get_nest_cfg(void* cfg , void* nest_base_cfg , void* nest_buffer , uint64_t nest_size) {
+int skip_get_nest_cfg(void* cfg, void* nest_base_cfg, void* nest_buffer, uint64_t nest_size) {
+    SkipConfig* parent_config = (SkipConfig*)cfg;
     uint64_t meta_size;
     memcpy(&meta_size, nest_buffer, sizeof(uint64_t));
+
+    if (skip_get_system_endian() != parent_config->endian) {
+        meta_size = swap_uint64(meta_size);
+    }
+
+    if (nest_size < meta_size + sizeof(uint64_t)) {
+        return SKIP_ERROR_BUFFER_TOO_SMALL;
+    }
+
     void* new_buffer_start = (uint8_t*)nest_buffer + sizeof(uint64_t);
-    
-    int err = SKIP_SUCCESS;
 
-
-    err = skip_set_endian_value_cfg(nest_base_cfg, skip_get_cfg_endian(cfg));
-
+    int err = skip_set_endian_value_cfg(nest_base_cfg, skip_get_cfg_endian(cfg));
     if (err != SKIP_SUCCESS) {
         return err;
     }
 
     err = skip_import_header_body(nest_base_cfg, new_buffer_start, meta_size);
-    
     if (err != SKIP_SUCCESS) {
         return err;
     }
 
-    return err;
+    return SKIP_SUCCESS;
 }
 
-int skip_get_nested_data_buffer(void* nested_cfg_buffer , void* nest_buffer , uint64_t nest_size , void* data_buffer , uint64_t data_size) {
+int skip_get_nested_data_buffer(void* cfg, void* nest_buffer, uint64_t nest_size, void* data_buffer, uint64_t data_size) {
+    SkipConfig* parent_config = (SkipConfig*)cfg;
     uint64_t meta_size;
     memcpy(&meta_size, nest_buffer, sizeof(uint64_t));
+
+    if (skip_get_system_endian() != parent_config->endian) {
+        meta_size = swap_uint64(meta_size);
+    }
 
     if (nest_size < meta_size + sizeof(uint64_t)) {
         return SKIP_ERROR_BUFFER_TOO_SMALL;
@@ -497,43 +490,46 @@ uint64_t skip_export_standalone_size(void* cfg) {
     return skip_get_header_export_size() + skip_get_export_body_size(cfg) + skip_get_data_size(cfg);
 }
 
-int skip_export_standalone(void* cfg , void* data_buffer , uint64_t data_size , void* standalone_buffer , uint64_t standalone_size) {
+int skip_export_standalone(void* cfg, void* data_buffer, uint64_t data_size, void* standalone_buffer, uint64_t standalone_size) {
     uint64_t header_size = skip_get_header_export_size();
     uint64_t header_body_size;
-    uint64_t data_buffer_size = skip_get_data_size(cfg);
     
-    skip_export_header(cfg, standalone_buffer, header_size, &header_body_size);
-
-    void* header_body_mem = malloc(header_body_size);
-
-    if (!header_body_mem) {
-        return SKIP_ERROR_ALLOCATION_FAILED;
-    }
-
-    skip_export_header_body(cfg, header_body_mem, header_body_size);
-
-    memcpy((uint8_t*)standalone_buffer + header_size, header_body_mem, header_body_size);
-    memcpy((uint8_t*)standalone_buffer + header_size + header_body_size, data_buffer, data_size);
-
-    return SKIP_SUCCESS;
-}
-
-int skip_fill_import_standalone_cfg(void* void_null_ptr , void* buffer , uint64_t buffer_size) {
-    uint64_t header_body_size;
-    void_null_ptr = skip_import_header(buffer, buffer_size, &header_body_size);
-
-
-    int err = SKIP_SUCCESS;
-
-    void* new_buffer = (uint8_t*)buffer + skip_get_header_export_size();
-
-    err = skip_import_header_body(void_null_ptr , new_buffer, header_body_size);
-
+    int err = skip_export_header(cfg, standalone_buffer, header_size, &header_body_size);
     if (err != SKIP_SUCCESS) {
         return err;
     }
 
+    void* header_body_mem = malloc(header_body_size);
+    if (!header_body_mem) {
+        return SKIP_ERROR_ALLOCATION_FAILED;
+    }
+
+    err = skip_export_header_body(cfg, header_body_mem, header_body_size);
+    if (err == SKIP_SUCCESS) {
+        memcpy((uint8_t*)standalone_buffer + header_size, header_body_mem, header_body_size);
+        memcpy((uint8_t*)standalone_buffer + header_size + header_body_size, data_buffer, data_size);
+    }
+
+    free(header_body_mem);
     return err;
+}
+
+int skip_fill_import_standalone_cfg(void** void_null_ptr, void* buffer, uint64_t buffer_size) {
+    uint64_t header_body_size;
+    *void_null_ptr = skip_import_header(buffer, buffer_size, &header_body_size);
+    if (!*void_null_ptr) {
+        return SKIP_ERROR_INVALID_CONFIG;
+    }
+
+    void* new_buffer = (uint8_t*)buffer + skip_get_header_export_size();
+    int err = skip_import_header_body(*void_null_ptr, new_buffer, header_body_size);
+    if (err != SKIP_SUCCESS) {
+        skip_free_cfg(*void_null_ptr);
+        *void_null_ptr = NULL;
+        return err;
+    }
+
+    return SKIP_SUCCESS;
 }
 
 

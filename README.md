@@ -323,11 +323,12 @@ Gets the endianness of the SKIP configuration.
 
 ### Nesting Functions
 
-#### `int skip_create_nest_buffer(void* final_res, uint64_t final_res_size, void* meta_buffer, uint64_t meta_size, void* data_buffer, uint64_t data_size)`
+#### `int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size, void* meta_buffer, uint64_t meta_size, void* data_buffer, uint64_t data_size)`
 
 Creates a nested buffer by combining a metadata buffer and a data buffer.
 
 - **Parameters:**
+  - `cfg`: A pointer to the SKIP config.
   - `final_res`: A pointer to the destination buffer.
   - `final_res_size`: The size of the destination buffer.
   - `meta_buffer`: A pointer to the metadata buffer.
@@ -347,12 +348,12 @@ Extracts the configuration from a nested buffer.
   - `nest_size`: The size of the nested buffer.
 - **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
 
-#### `int skip_get_nested_data_buffer(void* nested_cfg_buffer, void* nest_buffer, uint64_t nest_size, void* data_buffer, uint64_t data_size)`
+#### `int skip_get_nested_data_buffer(void* cfg, void* nest_buffer, uint64_t nest_size, void* data_buffer, uint64_t data_size)`
 
 Extracts the data buffer from a nested buffer.
 
 - **Parameters:**
-  - `nested_cfg_buffer`: A pointer to the configuration of the nested buffer.
+  - `cfg`: A pointer to the parent SKIP config.
   - `nest_buffer`: A pointer to the nested buffer.
   - `nest_size`: The size of the nested buffer.
   - `data_buffer`: A pointer to the destination buffer for the data.
@@ -470,3 +471,9 @@ PI (from copy): 3.14159
 
 ## Contribution
 - all contributions are welcomed :)
+
+## Versioning
+
+This project follows semantic versioning.
+
+**Note:** A recent change to the endianness handling logic has introduced a breaking change to the serialization format. Data serialized with older versions of the library will not be compatible with this new version.
