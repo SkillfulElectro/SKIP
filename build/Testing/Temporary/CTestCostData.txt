@@ -1,5 +1,0 @@
-python_example 1 0.327009
-go_example 1 0.108553
-java_example 1 2.67522
-rust_example 1 1.25335
----
