@@ -1,0 +1,99 @@
+Start testing: Nov 26 09:05 UTC
+----------------------------------------------------------
+1/4 Testing: python_example
+1/4 Test: python_example
+Command: "/home/jules/.pyenv/shims/python" "/app/python/example.py"
+Directory: /app/build
+"python_example" start time: Nov 26 09:05 UTC
+Output:
+----------------------------------------------------------
+x: 1.100000023841858
+y: 2.200000047683716
+z: 3.299999952316284
+id: 123
+Python example ran successfully!
+<end of output>
+Test time =   0.33 sec
+----------------------------------------------------------
+Test Passed.
+"python_example" end time: Nov 26 09:05 UTC
+"python_example" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/4 Testing: go_example
+2/4 Test: go_example
+Command: "/usr/local/go/bin/go" "run" "/app/go/example.go"
+Directory: /app/go
+"go_example" start time: Nov 26 09:05 UTC
+Output:
+----------------------------------------------------------
+x: 1.100000
+y: 2.200000
+z: 3.300000
+Go example ran successfully!
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"go_example" end time: Nov 26 09:05 UTC
+"go_example" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/4 Testing: java_example
+3/4 Test: java_example
+Command: "/usr/share/maven/bin/mvn" "exec:java"
+Directory: /app/java
+"java_example" start time: Nov 26 09:05 UTC
+Output:
+----------------------------------------------------------
+[INFO] Scanning for projects...
+[INFO]
+[INFO] -------------------------< com.skip:skip-java >-------------------------
+[INFO] Building skip-java 0.1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- exec:3.3.0:java (default-cli) @ skip-java ---
+x: 1.1
+y: 2.2
+z: 3.3
+id: 123
+Java example ran successfully!
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.569 s
+[INFO] Finished at: 2025-11-26T09:05:34Z
+[INFO] ------------------------------------------------------------------------
+<end of output>
+Test time =   2.68 sec
+----------------------------------------------------------
+Test Passed.
+"java_example" end time: Nov 26 09:05 UTC
+"java_example" time elapsed: 00:00:02
+----------------------------------------------------------
+
+4/4 Testing: rust_example
+4/4 Test: rust_example
+Command: "/home/jules/.cargo/bin/cargo" "run" "--manifest-path" "/app/rust/Cargo.toml" "--example" "simple"
+Directory: /app/build
+"rust_example" start time: Nov 26 09:05 UTC
+Output:
+----------------------------------------------------------
+   Compiling skip-rs v0.1.0 (/app/rust)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.16s
+     Running `/app/rust/target/debug/examples/simple`
+x: 1.1
+y: 2.2
+z: 3.3
+id: 123
+Rust example ran successfully!
+<end of output>
+Test time =   1.25 sec
+----------------------------------------------------------
+Test Passed.
+"rust_example" end time: Nov 26 09:05 UTC
+"rust_example" time elapsed: 00:00:01
+----------------------------------------------------------
+
+End testing: Nov 26 09:05 UTC

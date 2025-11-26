@@ -1,0 +1,1 @@
+/usr/bin/cc -fPIC -shared -Wl,-soname,libskip.so -o libskip.so CMakeFiles/skip.dir/skip.c.o
