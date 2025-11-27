@@ -11,7 +11,7 @@ The core of SKIP is the concept of a "config", which is a description of the dat
 ## Key Features
 
 - **Simplicity:** SKIP is designed to be easy to use, with a minimal API.
-- **Speed:** SKIP is written in C++ and is designed for performance.
+- **Speed:** SKIP is written in C and is designed for performance.
 - **Lightweight:** The SKIP library is small and has no external dependencies.
 - **Portability:** SKIP can be used with any programming language that can call C functions. The serialization format is platform-independent and supports both Big-Endian and Little-Endian byte orders.
 - **Security:** As long as the SKIP config is not exposed, there is no way to decode the underlying data.
