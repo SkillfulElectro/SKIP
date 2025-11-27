@@ -60,7 +60,7 @@ static int ensure_capacity(void** array, uint64_t* capacity, uint64_t element_si
 }
 
 #define SKIP_INITIAL_CAPACITY 16
-#define SKIP_CONFIG_VERSION 1
+#define SKIP_CONFIG_VERSION 2
 
 void* skip_create_base_config() {
     SkipConfig* config = (SkipConfig*)malloc(sizeof(SkipConfig));
