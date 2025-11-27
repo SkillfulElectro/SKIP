@@ -336,7 +336,7 @@ int skip_import_header_body(void* cfg, const char* buffer, uint64_t buffer_size)
     const char* end_pos = buffer + buffer_size;
 
     if (buffer_size % (sizeof(int32_t) + sizeof(uint64_t)) {
-        return SKIP_ERROR_INVALID_ARGUMENT;
+        return SKIP_ERROR_INVALID_CONFIG;
     }
     
     int system_endian = skip_get_system_endian();
