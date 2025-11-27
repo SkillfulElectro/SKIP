@@ -152,7 +152,7 @@ void test_import_export() {
     assert(skip_export_header(config, header_buffer, header_size, &exported_body_size) == SKIP_SUCCESS);
 
     // 3. Export the body
-    uint64_t body_size = skip_get_export_body_size(config);
+    uint64_t body_size = skip_get_export_header_body_size(config);
     char* body_buffer = new char[body_size];
     assert(skip_export_header_body(config, body_buffer, body_size) == SKIP_SUCCESS);
     assert(exported_body_size == body_size);
@@ -245,7 +245,7 @@ void test_error_handling() {
     std::cout << "Export header buffer too small test passed." << std::endl;
 
     // Test exporting body to a buffer that is too small
-    body_size = skip_get_export_body_size(config);
+    body_size = skip_get_export_header_body_size(config);
     char* body_buffer = new char[body_size];
     assert(skip_export_header_body(config, body_buffer, body_size - 1) == SKIP_ERROR_BUFFER_TOO_SMALL);
     std::cout << "Export body buffer too small test passed." << std::endl;
@@ -296,7 +296,7 @@ void test_endianness_config() {
     uint64_t exported_body_size;
     assert(skip_export_header(config, header_buffer, header_size, &exported_body_size) == SKIP_SUCCESS);
 
-    uint64_t body_size = skip_get_export_body_size(config);
+    uint64_t body_size = skip_get_export_header_body_size(config);
     char* body_buffer = new char[body_size];
     assert(skip_export_header_body(config, body_buffer, body_size) == SKIP_SUCCESS);
 

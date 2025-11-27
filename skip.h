@@ -95,7 +95,7 @@ int skip_import_header_body(void* cfg, const char* buffer, uint64_t buffer_size)
  * @param cfg A pointer to the SKIP config.
  * @return The size in bytes required for the configuration body.
  */
-uint64_t skip_get_export_body_size(void* cfg);
+uint64_t skip_get_export_header_body_size(void* cfg);
 
 /**
  * @brief Exports the configuration body to a buffer.
@@ -145,7 +145,7 @@ int skip_set_endian_value_cfg(void* cfg, int endian);
 
 int skip_get_cfg_endian(void* cfg);
 
-int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size, void* meta_buffer, uint64_t meta_size, void* data_buffer, uint64_t data_size);
+int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size, void* data_buffer, uint64_t data_size);
 
 int skip_get_nest_cfg(void* cfg, void* nest_base_cfg, void* nest_buffer, uint64_t nest_size);
 
@@ -156,10 +156,10 @@ uint64_t skip_export_standalone_size(void* cfg);
 
 int skip_export_standalone(void* cfg , void* data_buffer , uint64_t data_size , void* standalone_buffer , uint64_t standalone_size);
 
-int skip_fill_import_standalone_cfg(void** void_null_ptr, void* buffer, uint64_t buffer_size);
+int skip_import_standalone_get_cfg(void** void_null_ptr, void* buffer, uint64_t buffer_size);
 
 
-int skip_fill_data_buffer_import_standalone(void* cfg , void* buffer , uint64_t buffer_size , void* data_buffer , uint64_t data_buffer_size);
+int skip_import_standalone_get_data_buffer(void* cfg , void* buffer , uint64_t buffer_size , void* data_buffer , uint64_t data_buffer_size);
 
 #ifdef __cplusplus
 }

@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "skip.h"
@@ -84,7 +85,7 @@ void* skip_create_base_config() {
     config->offsets[0] = 0;
     config->offsets_size = 1;
 
-    config->endian = SKIP_LITTLE_ENDIAN;
+    config->endian = skip_get_system_endian();
 
     return config;
 }
@@ -149,7 +150,7 @@ int skip_export_header(void* cfg, char* buffer, uint64_t buffer_size, uint64_t* 
     }
 
     SkipConfig* config = (SkipConfig*)cfg;
-    uint64_t body_size = skip_get_export_body_size(config);
+    uint64_t body_size = skip_get_export_header_body_size(config);
 
     SkipHeader header;
     header.magic = SKIP_MAGIC;
@@ -294,14 +295,14 @@ int skip_write_index_to_buffer(void* cfg, void* buffer, uint64_t buffer_size, vo
     return SKIP_SUCCESS;
 }
 
-uint64_t skip_get_export_body_size(void* cfg) {
+uint64_t skip_get_export_header_body_size(void* cfg) {
     SkipConfig* config = (SkipConfig*)cfg;
     return config->types_size * (sizeof(int32_t) + sizeof(uint64_t));
 }
 
 int skip_export_header_body(void* cfg, char* buffer, uint64_t buffer_size) {
     SkipConfig* config = (SkipConfig*)cfg;
-    uint64_t required_size = skip_get_export_body_size(cfg);
+    uint64_t required_size = skip_get_export_header_body_size(cfg);
     if (buffer_size < required_size) {
         return SKIP_ERROR_BUFFER_TOO_SMALL;
     }
@@ -415,21 +416,31 @@ int skip_read_index_from_buffer(void* cfg, void* buffer, uint64_t buffer_size, v
 }
 
 
-int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size, void* meta_buffer, uint64_t meta_size, void* data_buffer, uint64_t data_size) {
-    if (final_res_size < meta_size + data_size + sizeof(uint64_t)) {
+int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size, void* data_buffer, uint64_t data_size) {
+    uint64_t header_body_size = skip_get_export_header_body_size(cfg);
+    if (final_res_size < header_body_size + data_size + sizeof(uint64_t)) {
         return (int)SKIP_ERROR_BUFFER_TOO_SMALL;
     }
 
     SkipConfig* config = (SkipConfig*)cfg;
-    uint64_t meta_size_to_write = meta_size;
+    uint64_t meta_size_to_write = header_body_size;
 
     if (skip_get_system_endian() != config->endian) {
         meta_size_to_write = swap_uint64(meta_size_to_write);
     }
 
+
+    void* header_body_buffer = malloc(header_body_size);
+    int err = skip_export_header_body(cfg, header_body_buffer, header_body_size);
+
+    if (err != SKIP_SUCCESS) {
+        free(header_body_buffer);
+        return err;
+    }
+
     memcpy(final_res, &meta_size_to_write, sizeof(uint64_t));
-    memcpy((uint8_t*)final_res + sizeof(uint64_t), meta_buffer, meta_size);
-    memcpy((uint8_t*)final_res + sizeof(uint64_t) + meta_size, data_buffer, data_size);
+    memcpy((uint8_t*)final_res + sizeof(uint64_t), header_body_buffer, header_body_size);
+    memcpy((uint8_t*)final_res + sizeof(uint64_t) + header_body_size, data_buffer, data_size);
 
     return (int)SKIP_SUCCESS;
 }
@@ -487,7 +498,7 @@ int skip_get_nested_data_buffer(void* cfg, void* nest_buffer, uint64_t nest_size
 }
 
 uint64_t skip_export_standalone_size(void* cfg) {
-    return skip_get_header_export_size() + skip_get_export_body_size(cfg) + skip_get_data_size(cfg);
+    return skip_get_header_export_size() + skip_get_export_header_body_size(cfg) + skip_get_data_size(cfg);
 }
 
 int skip_export_standalone(void* cfg, void* data_buffer, uint64_t data_size, void* standalone_buffer, uint64_t standalone_size) {
@@ -514,18 +525,18 @@ int skip_export_standalone(void* cfg, void* data_buffer, uint64_t data_size, voi
     return err;
 }
 
-int skip_fill_import_standalone_cfg(void** void_null_ptr, void* buffer, uint64_t buffer_size) {
+int skip_import_standalone_get_cfg(void** out_cfg, void* buffer, uint64_t buffer_size) {
     uint64_t header_body_size;
-    *void_null_ptr = skip_import_header(buffer, buffer_size, &header_body_size);
-    if (!*void_null_ptr) {
+    *out_cfg = skip_import_header(buffer, buffer_size, &header_body_size);
+    if (!*out_cfg) {
         return SKIP_ERROR_INVALID_CONFIG;
     }
 
     void* new_buffer = (uint8_t*)buffer + skip_get_header_export_size();
-    int err = skip_import_header_body(*void_null_ptr, new_buffer, header_body_size);
+    int err = skip_import_header_body(*out_cfg, new_buffer, header_body_size);
     if (err != SKIP_SUCCESS) {
-        skip_free_cfg(*void_null_ptr);
-        *void_null_ptr = NULL;
+        skip_free_cfg(*out_cfg);
+        *out_cfg = NULL;
         return err;
     }
 
@@ -533,9 +544,9 @@ int skip_fill_import_standalone_cfg(void** void_null_ptr, void* buffer, uint64_t
 }
 
 
-int skip_fill_data_buffer_import_standalone(void* cfg , void* buffer , uint64_t buffer_size , void* data_buffer , uint64_t data_buffer_size) {
+int skip_import_standalone_get_data_buffer(void* cfg , void* buffer , uint64_t buffer_size , void* data_buffer , uint64_t data_buffer_size) {
     uint64_t header_size = skip_get_header_export_size();
-    uint64_t header_body_size = skip_get_export_body_size(cfg);
+    uint64_t header_body_size = skip_get_export_header_body_size(cfg);
     uint64_t body_size = skip_get_data_size(cfg);
     
     if (body_size > data_buffer_size) {
