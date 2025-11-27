@@ -431,6 +431,9 @@ int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size,
 
 
     void* header_body_buffer = malloc(header_body_size);
+    if (!header_body_buffer) {
+         return SKIP_ERROR_ALLOCATION_FAILED;
+    }
     int err = skip_export_header_body(cfg, header_body_buffer, header_body_size);
 
     if (err != SKIP_SUCCESS) {
