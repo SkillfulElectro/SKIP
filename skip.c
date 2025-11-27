@@ -442,6 +442,7 @@ int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size,
     memcpy((uint8_t*)final_res + sizeof(uint64_t), header_body_buffer, header_body_size);
     memcpy((uint8_t*)final_res + sizeof(uint64_t) + header_body_size, data_buffer, data_size);
 
+    free(header_body_buffer);
     return (int)SKIP_SUCCESS;
 }
 
