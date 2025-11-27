@@ -86,6 +86,7 @@ enum SkipDataTypeCode {
     skip_float32 = 8,
     skip_float64 = 9,
     skip_char = 10,
+    skip_nest = 11,
 };
 ```
 
@@ -100,6 +101,7 @@ enum SkipDataTypeCode {
 - `skip_float32`: 4-byte single-precision float.
 - `skip_float64`: 8-byte double-precision float.
 - `skip_char`: 1-byte character.
+- `skip_nest`: Represents a nested SKIP object, allowing for hierarchical data structures.
 
 #### `SkipEndian`
 
@@ -270,7 +272,7 @@ Imports a configuration header from a buffer and creates a new SKIP config objec
   - `out_body_size`: A pointer to a `uint64_t` where the size of the configuration body (as read from the header) will be stored. This tells you how large the buffer for the body needs to be.
 - **Returns:** A pointer to a new SKIP config, or `nullptr` on failure (e.g., invalid magic number, version mismatch).
 
-#### `uint64_t skip_get_export_body_size(void* cfg)`
+#### `uint64_t skip_get_export_header_body_size(void* cfg)`
 
 Calculates the size of the buffer needed to export the configuration body (the actual type information).
 
@@ -323,16 +325,14 @@ Gets the endianness of the SKIP configuration.
 
 ### Nesting Functions
 
-#### `int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size, void* meta_buffer, uint64_t meta_size, void* data_buffer, uint64_t data_size)`
+#### `int skip_create_nest_buffer(void* cfg, void* final_res, uint64_t final_res_size, void* data_buffer, uint64_t data_size)`
 
-Creates a nested buffer by combining a metadata buffer and a data buffer.
+Creates a nested buffer by serializing the configuration and appending the provided data buffer.
 
 - **Parameters:**
   - `cfg`: A pointer to the SKIP config.
   - `final_res`: A pointer to the destination buffer.
   - `final_res_size`: The size of the destination buffer.
-  - `meta_buffer`: A pointer to the metadata buffer.
-  - `meta_size`: The size of the metadata buffer.
   - `data_buffer`: A pointer to the data buffer.
   - `data_size`: The size of the data buffer.
 - **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
@@ -382,17 +382,17 @@ Exports a standalone buffer containing the header, body, and data.
   - `standalone_size`: The size of the destination buffer.
 - **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
 
-#### `int skip_fill_import_standalone_cfg(void* void_null_ptr, void* buffer, uint64_t buffer_size)`
+#### `int skip_import_standalone_get_cfg(void** void_null_ptr, void* buffer, uint64_t buffer_size)`
 
 Imports the configuration from a standalone buffer.
 
 - **Parameters:**
-  - `void_null_ptr`: A null pointer that will be populated with the new config.
+  - `void_null_ptr`: A pointer to a void pointer that will be populated with the new config.
   - `buffer`: A pointer to the standalone buffer.
   - `buffer_size`: The size of the standalone buffer.
 - **Returns:** `SKIP_SUCCESS` on success, or an error code on failure.
 
-#### `int skip_fill_data_buffer_import_standalone(void* cfg, void* buffer, uint64_t buffer_size, void* data_buffer, uint64_t data_buffer_size)`
+#### `int skip_import_standalone_get_data_buffer(void* cfg, void* buffer, uint64_t buffer_size, void* data_buffer, uint64_t data_buffer_size)`
 
 Imports the data from a standalone buffer.
 
@@ -475,5 +475,3 @@ PI (from copy): 3.14159
 ## Versioning
 
 This project follows semantic versioning.
-
-**Note:** A recent change to the endianness handling logic has introduced a breaking change to the serialization format. Data serialized with older versions of the library will not be compatible with this new version.
