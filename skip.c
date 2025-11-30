@@ -334,8 +334,8 @@ int skip_import_header_body(void* cfg, const char* buffer, uint64_t buffer_size)
 
     const char* current_pos = buffer;
     const char* end_pos = buffer + buffer_size;
-
-    if (buffer_size % (sizeof(int32_t) + sizeof(uint64_t) != 0) {
+    
+    if (buffer_size % (sizeof(int32_t) + sizeof(uint64_t) != 0)) {
         return SKIP_ERROR_INVALID_CONFIG;
     }
     
