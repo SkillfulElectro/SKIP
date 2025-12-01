@@ -126,6 +126,8 @@ enum SkipError {
     SKIP_ERROR_ALLOCATION_FAILED = -3,
     SKIP_ERROR_BUFFER_TOO_SMALL = -4,
     SKIP_ERROR_INVALID_CONFIG = -5,
+    SKIP_ERROR_FAILED_TO_CREATE_HEADER_CFG = -6,
+    SKIP_ERROR_INIT_THE_SKIP_FIRST = -7,
 };
 ```
 
@@ -135,6 +137,8 @@ enum SkipError {
 - `SKIP_ERROR_ALLOCATION_FAILED`: A memory allocation failed.
 - `SKIP_ERROR_BUFFER_TOO_SMALL`: The provided buffer was too small to complete the operation.
 - `SKIP_ERROR_INVALID_CONFIG`: The provided configuration was invalid or corrupted.
+- `SKIP_ERROR_FAILED_TO_CREATE_HEADER_CFG`: In skip_init function when it fails to create the skip cfg for header.
+- `SKIP_ERROR_INIT_THE_SKIP_FIRST`: Happens when you did not use skip_init function before export/import functions.
 
 #### `SkipInternalType`
 
@@ -151,6 +155,18 @@ struct SkipInternalType {
 - `count`: The number of elements of this type.
 
 ### Functions
+
+#### `int skip_init()`
+
+Initializes the config for skip header which is used in export/import functions.
+
+- **Returns:** `0` on success.
+
+#### `int skip_free()`
+
+Destroys the config for skip header which is used in export/import functions.
+
+- **Returns:** `0` on success.
 
 #### `void* skip_create_base_config()`
 
@@ -270,6 +286,7 @@ Imports a configuration header from a buffer and creates a new SKIP config objec
   - `buffer`: The buffer to read the header from.
   - `buffer_size`: The size of the buffer.
   - `out_body_size`: A pointer to a `uint64_t` where the size of the configuration body (as read from the header) will be stored. This tells you how large the buffer for the body needs to be.
+  - `out_data_size`: A pointer to a `uint64_t` where the size of the data buffer (as read from the header) will be stored. This tells you how large the buffer for the data needs to be. So you will know the buffer size for it before parsing the configuration body.
 - **Returns:** A pointer to a new SKIP config, or `nullptr` on failure (e.g., invalid magic number, version mismatch).
 
 #### `uint64_t skip_get_export_header_body_size(void* cfg)`
