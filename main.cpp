@@ -159,7 +159,7 @@ void test_import_export() {
 
     // 4. Import the header
     uint64_t imported_body_size;
-    void* imported_config = skip_import_header(header_buffer, header_size, &imported_body_size);
+    void* imported_config = skip_import_header(header_buffer, header_size, &imported_body_size , NULL);
     assert(imported_config != NULL);
     assert(body_size == imported_body_size);
 
@@ -252,7 +252,7 @@ void test_error_handling() {
 
     // Test importing header from a buffer that is too small
     uint64_t imported_body_size;
-    assert(skip_import_header(header_buffer, header_size - 1, &imported_body_size) == NULL);
+    assert(skip_import_header(header_buffer, header_size - 1, &imported_body_size , NULL) == NULL);
     std::cout << "Import header buffer too small test passed." << std::endl;
 
 
@@ -301,7 +301,7 @@ void test_endianness_config() {
     assert(skip_export_header_body(config, body_buffer, body_size) == SKIP_SUCCESS);
 
     uint64_t imported_body_size;
-    void* imported_config = skip_import_header(header_buffer, header_size, &imported_body_size);
+    void* imported_config = skip_import_header(header_buffer, header_size, &imported_body_size , NULL);
     assert(imported_config != NULL);
     assert(skip_import_header_body(imported_config, body_buffer, body_size) == SKIP_SUCCESS);
 
@@ -329,6 +329,8 @@ void test_endianness_config() {
 }
 
 int main() {
+    skip_init();
+
     test_new_datatypes();
     test_get_index_ptr();
     test_endianness_config();
@@ -339,5 +341,6 @@ int main() {
 
     std::cout << "All tests passed!" << std::endl;
 
+    skip_free();
     return 0;
 }

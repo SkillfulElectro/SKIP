@@ -20,6 +20,8 @@ enum SkipError {
     SKIP_ERROR_ALLOCATION_FAILED = -3,
     SKIP_ERROR_BUFFER_TOO_SMALL = -4,
     SKIP_ERROR_INVALID_CONFIG = -5,
+    SKIP_ERROR_FAILED_TO_CREATE_HEADER_CFG = -6,
+    SKIP_ERROR_INIT_THE_SKIP_FIRST = -7,
 };
 
 enum SkipDataTypeCode {
@@ -41,6 +43,10 @@ typedef struct SkipInternalType {
     int32_t type_code;
     uint64_t count;
 } SkipInternalType;
+
+int skip_init();
+
+int skip_free();
 
 void* skip_create_base_config();
 
@@ -72,7 +78,7 @@ uint64_t skip_get_header_export_size();
 
 int skip_export_header(void* cfg, char* buffer, uint64_t buffer_size, uint64_t* out_body_size);
 
-void* skip_import_header(const char* buffer, uint64_t buffer_size, uint64_t* out_body_size);
+void* skip_import_header(void* buffer, uint64_t buffer_size, uint64_t* out_body_size , uint64_t* out_data_size);
 
 int skip_get_system_endian();
 

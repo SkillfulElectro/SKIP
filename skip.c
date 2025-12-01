@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,7 +11,8 @@ typedef struct {
     uint32_t version;
     uint64_t body_size;
     uint8_t endian;
-    uint8_t reserved[15];
+    uint64_t data_size;
+    uint8_t reserved[7];
 } SkipHeader;
 
 
@@ -47,6 +49,62 @@ typedef struct {
     int endian;
 } SkipConfig;
 
+SkipConfig* SKIP_HEADER;
+
+
+int skip_init() {
+    if (SKIP_HEADER) {
+        return SKIP_SUCCESS;
+    }
+
+    SKIP_HEADER = skip_create_base_config();
+
+    if (!SKIP_HEADER) {
+        return (int)SKIP_ERROR_FAILED_TO_CREATE_HEADER_CFG;
+    }
+
+    
+
+    int err = skip_set_endian_value_cfg(SKIP_HEADER, SKIP_LITTLE_ENDIAN);
+
+    if (err != SKIP_SUCCESS) {
+        return err;
+    }
+
+    err = skip_push_type_to_config(SKIP_HEADER, skip_uint32, 1);
+    if (err != SKIP_SUCCESS) {
+        return err;
+    }
+
+    err = skip_push_type_to_config(SKIP_HEADER, skip_uint32, 1);
+    if (err != SKIP_SUCCESS) {
+        return err;
+    }
+
+    err = skip_push_type_to_config(SKIP_HEADER, skip_uint64, 1);
+    if (err != SKIP_SUCCESS) {
+        return err;
+    }
+
+    err = skip_push_type_to_config(SKIP_HEADER, skip_uint8, 1);
+    if (err != SKIP_SUCCESS) {
+        return err;
+    }
+
+    err = skip_push_type_to_config(SKIP_HEADER, skip_uint64, 1);
+    if (err != SKIP_SUCCESS) {
+        return err;
+    }
+
+    err = skip_push_type_to_config(SKIP_HEADER, skip_char, 7);
+
+    return err;
+}
+
+int skip_free() {
+    return skip_free_cfg(SKIP_HEADER);
+}
+
 static int ensure_capacity(void** array, uint64_t* capacity, uint64_t element_size, uint64_t new_capacity) {
     if (*capacity < new_capacity) {
         void* new_array = realloc(*array, (size_t)(new_capacity * element_size));
@@ -59,8 +117,8 @@ static int ensure_capacity(void** array, uint64_t* capacity, uint64_t element_si
     return SKIP_SUCCESS;
 }
 
-#define SKIP_INITIAL_CAPACITY 16
-#define SKIP_CONFIG_VERSION 2
+#define SKIP_INITIAL_CAPACITY 5
+#define SKIP_CONFIG_VERSION 211
 
 void* skip_create_base_config() {
     SkipConfig* config = (SkipConfig*)malloc(sizeof(SkipConfig));
@@ -141,11 +199,23 @@ int skip_push_type_to_config(void* cfg, int32_t type_code, uint64_t count) {
 }
 
 uint64_t skip_get_header_export_size() {
-    return sizeof(SkipHeader);
+    if (SKIP_HEADER) {
+        return skip_get_data_size(SKIP_HEADER); 
+    }
+
+    return 0;
 }
 
 int skip_export_header(void* cfg, char* buffer, uint64_t buffer_size, uint64_t* out_body_size) {
-    if (buffer_size < sizeof(SkipHeader)) {
+    void* header_cfg = SKIP_HEADER;
+
+    if (!header_cfg) {
+        return (int)SKIP_ERROR_INIT_THE_SKIP_FIRST;
+    }
+
+    
+
+    if (buffer_size < skip_get_header_export_size()) {
         return SKIP_ERROR_BUFFER_TOO_SMALL;
     }
 
@@ -154,38 +224,56 @@ int skip_export_header(void* cfg, char* buffer, uint64_t buffer_size, uint64_t* 
 
     SkipHeader header;
     header.magic = SKIP_MAGIC;
+    skip_write_index_to_buffer(header_cfg, buffer, buffer_size, &header.magic, 0);
     header.version = SKIP_CONFIG_VERSION;
+    skip_write_index_to_buffer(header_cfg, buffer, buffer_size, &header.version, 1);
+
     header.body_size = body_size;
+    skip_write_index_to_buffer(header_cfg, buffer, buffer_size, &header.body_size, 2);
+
     header.endian = config->endian;
+    skip_write_index_to_buffer(header_cfg, buffer, buffer_size, &header.endian, 3);
+
+    header.body_size = skip_get_data_size(cfg);
+    skip_write_index_to_buffer(header_cfg, buffer, buffer_size, &header.endian, 4);
+
+
     memset(header.reserved, 0, sizeof(header.reserved));
+    skip_write_index_to_buffer(header_cfg, buffer, buffer_size, &header.reserved, 5);
 
-    if (skip_get_system_endian() != config->endian) {
-        header.magic = swap_uint32(header.magic);
-        header.version = swap_uint32(header.version);
-        header.body_size = swap_uint64(header.body_size);
+
+    if (out_body_size) {
+        *out_body_size = body_size;
     }
-
-    memcpy(buffer, &header, sizeof(SkipHeader));
-    *out_body_size = body_size;
 
     return SKIP_SUCCESS;
 }
 
-void* skip_import_header(const char* buffer, uint64_t buffer_size, uint64_t* out_body_size) {
-    if (buffer_size < sizeof(SkipHeader)) {
+void* skip_import_header(void* buffer, uint64_t buffer_size, uint64_t* out_body_size , uint64_t* out_data_size) {
+
+    void* header_cfg = SKIP_HEADER;
+    if (!header_cfg) {
+        return NULL;
+    }
+
+
+
+    if (buffer_size < skip_get_header_export_size()) {
         return NULL;
     }
 
     SkipHeader header;
-    memcpy(&header, buffer, sizeof(SkipHeader));
+    skip_read_index_from_buffer(header_cfg, buffer, buffer_size, &header.magic, 0);
+    skip_read_index_from_buffer(header_cfg, buffer, buffer_size, &header.version, 1);
+    skip_read_index_from_buffer(header_cfg, buffer, buffer_size, &header.body_size, 2);
+    skip_read_index_from_buffer(header_cfg, buffer, buffer_size, &header.endian, 3);
+    skip_read_index_from_buffer(header_cfg, buffer, buffer_size, &header.data_size, 4);
+    skip_read_index_from_buffer(header_cfg, buffer, buffer_size, &header.reserved, 5);
 
-    if (skip_get_system_endian() != header.endian) {
-        header.magic = swap_uint32(header.magic);
-        header.version = swap_uint32(header.version);
-        header.body_size = swap_uint64(header.body_size);
-    }
 
-    if (header.magic != SKIP_MAGIC || header.version != SKIP_CONFIG_VERSION) {
+    
+
+    if (header.magic != SKIP_MAGIC || header.version != SKIP_CONFIG_VERSION) {       
         return NULL;
     }
 
@@ -195,7 +283,13 @@ void* skip_import_header(const char* buffer, uint64_t buffer_size, uint64_t* out
     }
 
     skip_set_endian_value_cfg(config_ptr, header.endian);
-    *out_body_size = header.body_size;
+    if (out_body_size) {
+        *out_body_size = header.body_size;
+    }
+
+    if (out_data_size) {
+        *out_data_size = header.data_size;
+    }
 
     return config_ptr;
 }
@@ -536,7 +630,7 @@ int skip_export_standalone(void* cfg, void* data_buffer, uint64_t data_size, voi
 
 int skip_import_standalone_get_cfg(void** out_cfg, void* buffer, uint64_t buffer_size) {
     uint64_t header_body_size;
-    *out_cfg = skip_import_header(buffer, buffer_size, &header_body_size);
+    *out_cfg = skip_import_header(buffer, buffer_size, &header_body_size , NULL);
     if (!*out_cfg) {
         return SKIP_ERROR_INVALID_CONFIG;
     }
